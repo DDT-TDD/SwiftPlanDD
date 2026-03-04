@@ -6,16 +6,22 @@ import { THEMES } from '../../utils/constants';
 export const ContextMenu = () => {
     const contextMenu = useEditorStore(state => state.contextMenu);
     const setContextMenu = useEditorStore(state => state.setContextMenu);
+    const selectedIds = useEditorStore(state => state.selectedIds);
     const themeName = useEditorStore(state => state.themeName);
     const deleteItem = useProjectStore(state => state.deleteItem);
 
     if (!contextMenu.show) return null;
     const theme = THEMES[themeName];
+    const menuX = Math.max(0, Math.min(contextMenu.x, window.innerWidth - 160));
+    const menuY = Math.max(0, Math.min(contextMenu.y, window.innerHeight - 190));
 
     const handleDelete = () => {
         if (contextMenu.targetId) {
             deleteItem(contextMenu.targetId);
-            useEditorStore.getState().setSelectedId(null);
+            useEditorStore.getState().clearSelection();
+        } else if (selectedIds.length > 0) {
+            selectedIds.forEach((id) => deleteItem(id));
+            useEditorStore.getState().clearSelection();
         }
         setContextMenu({ show: false });
     };
@@ -24,8 +30,8 @@ export const ContextMenu = () => {
         <div
             style={{
                 position: 'fixed',
-                top: contextMenu.y,
-                left: contextMenu.x,
+                top: menuY,
+                left: menuX,
                 background: themeName === 'light' ? '#ffffff' : '#1e293b',
                 border: `1px solid ${theme.grid}`,
                 borderRadius: '6px',
@@ -36,7 +42,6 @@ export const ContextMenu = () => {
                 minWidth: '150px',
                 padding: '4px'
             }}
-            onMouseLeave={() => setContextMenu({ show: false })}
         >
             <button
                 onClick={() => { useProjectStore.getState().undo(); setContextMenu({ show: false }); }}

@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useEffect } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
 import { THEMES } from '../../utils/constants';
 
@@ -6,9 +7,20 @@ export const HelpModal = ({ onClose }) => {
     const themeName = useEditorStore(state => state.themeName);
     const theme = THEMES[themeName];
 
+    useEffect(() => {
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [onClose]);
+
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: themeName === 'light' ? '#fff' : '#1e293b', padding: '30px', borderRadius: '12px', width: '500px', maxWidth: '90%', maxHeight: '90%', overflowY: 'auto', color: theme.text, position: 'relative', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+        <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: themeName === 'light' ? '#fff' : '#1e293b', padding: '30px', borderRadius: '12px', width: '500px', maxWidth: '90%', maxHeight: '90%', overflowY: 'auto', color: theme.text, position: 'relative', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
                 <button onClick={onClose} style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', color: theme.dim, cursor: 'pointer' }}>
                     <X size={24} />
                 </button>

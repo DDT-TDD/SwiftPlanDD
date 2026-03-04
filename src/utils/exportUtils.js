@@ -12,15 +12,20 @@ export const exportToPNG = (stageRef) => {
     document.body.removeChild(link);
 };
 
-export const exportToPDF = (stageRef, themeName = 'light') => {
+export const exportToPDF = (stageRef, themeName = 'light', options = {}) => {
     if (!stageRef) return;
     const dataURL = stageRef.toDataURL({ pixelRatio: 2 });
 
-    // A4 dimensions: 210 x 297 mm
+    const {
+        paperSize = 'a4',
+        orientation = 'landscape',
+        scalePreset = null // e.g. '1:50', '1:100', '1:200'
+    } = options;
+
     const pdf = new jsPDF({
-        orientation: 'landscape',
+        orientation,
         unit: 'mm',
-        format: 'a4'
+        format: paperSize
     });
 
     const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -49,6 +54,13 @@ export const exportToPDF = (stageRef, themeName = 'light') => {
         pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
     }
 
+    // Add scale info if preset specified
+    if (scalePreset) {
+        pdf.setFontSize(8);
+        pdf.setTextColor(100);
+        pdf.text(`Scale: ${scalePreset}`, 5, pdfHeight - 5);
+    }
+
     pdf.addImage(dataURL, 'PNG', xOffset, yOffset, finalWidth, finalHeight);
     pdf.save(`swiftplan-document-${new Date().toISOString().split('T')[0]}.pdf`);
 };
@@ -67,23 +79,25 @@ export const exportToDrawio = (projectState) => {
 
     const { walls, rooms, furniture } = projectState;
 
-    // Export Rooms as grouped polygons
+    // Export Rooms as actual polygons with proper point coordinates
     rooms.forEach(room => {
-        xml += `        <mxCell id="${idCounter++}" value="${(room.area / 1000000).toFixed(2)}m²" style="shape=polygon;fillColor=#eef1f5;strokeColor=#cbd5e1;pointerEvents=1;" vertex="1" parent="1">\n`;
-        // Draw.io expects width/height for bounding box
         const xs = room.points.map(p => p.x);
         const ys = room.points.map(p => p.y);
         const minX = Math.min(...xs);
         const minY = Math.min(...ys);
         const w = Math.max(...xs) - minX;
         const h = Math.max(...ys) - minY;
+        const pointsStr = room.points.map(p => `${w > 0 ? ((p.x - minX) / w).toFixed(4) : 0},${h > 0 ? ((p.y - minY) / h).toFixed(4) : 0}`).join('],[');
+        const areaLabel = room.area ? `${(room.area / 1000000).toFixed(2)}m²` : '';
+        xml += `        <mxCell id="${idCounter++}" value="${areaLabel}" style="shape=polygon;perimeter=polygonPerimeter2;points=[[${pointsStr}]];fillColor=#eef1f5;strokeColor=#cbd5e1;pointerEvents=1;" vertex="1" parent="1">\n`;
         xml += `          <mxGeometry x="${minX}" y="${minY}" width="${w}" height="${h}" as="geometry" />\n`;
         xml += `        </mxCell>\n`;
     });
 
-    // Export Walls as distinct lines
+    // Export Walls as distinct lines (thickness in points, not mm)
     walls.forEach(wall => {
-        xml += `        <mxCell id="${idCounter++}" value="" style="endArrow=none;html=1;rounded=0;strokeWidth=${wall.thickness};strokeColor=#334155;" edge="1" parent="1">\n`;
+        const strokePt = Math.max(1, Math.round((wall.thickness || 200) / 50));
+        xml += `        <mxCell id="${idCounter++}" value="" style="endArrow=none;html=1;rounded=0;strokeWidth=${strokePt};strokeColor=#334155;" edge="1" parent="1">\n`;
         xml += `          <mxGeometry width="50" height="50" relative="1" as="geometry">\n`;
         xml += `            <mxPoint x="${wall.x1}" y="${wall.y1}" as="sourcePoint" />\n`;
         xml += `            <mxPoint x="${wall.x2}" y="${wall.y2}" as="targetPoint" />\n`;

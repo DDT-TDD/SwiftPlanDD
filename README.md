@@ -46,6 +46,11 @@ npm run electron:build
 ```
 The standalone executable will be generated in the `dist_electron` directory.
 
+## Release Notes & Changelog
+
+- Release notes: `RELEASE_NOTES_v1.0.0.md`, `RELEASE_NOTES_v1.1.0.md`
+- Changelog: `CHANGELOG.md`
+
 ## Keyboard Shortcuts
 
 - **Spacebar + Left Click Drag**: Pan Canvas
@@ -59,4 +64,4 @@ The standalone executable will be generated in the `dist_electron` directory.
 
 ## License
 
-Copyright (c) 2026. All rights reserved.
+This project is licensed under the MIT License. See the `LICENSE` file for details.

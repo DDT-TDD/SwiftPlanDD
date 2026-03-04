@@ -44,6 +44,9 @@ const DimensionLine = ({ dim, canvasScale, theme, unit, showDual, isSelected, on
 
 export const AnnotationLayer = () => {
     const dimensions = useProjectStore(state => state.dimensions);
+    const annotations = useProjectStore(state => state.annotations);
+    const updateAnnotation = useProjectStore(state => state.updateAnnotation);
+    const walls = useProjectStore(state => state.walls);
 
     const canvasScale = useEditorStore(state => state.canvasScale);
     const themeName = useEditorStore(state => state.themeName);
@@ -53,6 +56,7 @@ export const AnnotationLayer = () => {
     const setSelectedId = useEditorStore(state => state.setSelectedId);
     const tool = useEditorStore(state => state.tool);
     const activeObject = useEditorStore(state => state.activeObject);
+    const showAutoDimensions = useEditorStore(state => state.showAutoDimensions);
 
     const roughMode = useEditorStore(state => state.roughMode);
 
@@ -87,6 +91,71 @@ export const AnnotationLayer = () => {
                     roughMode={roughMode}
                 />
             )}
+
+            {/* Auto-dimension lines for walls */}
+            {showAutoDimensions && walls.map(w => {
+                // Offset dimension line parallel to the wall
+                const dx = w.x2 - w.x1;
+                const dy = w.y2 - w.y1;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                if (len < 10) return null;
+                const offset = (w.thickness || 200) + 150; // place outside wall
+                const nx = -dy / len * offset;
+                const ny = dx / len * offset;
+                return (
+                    <DimensionLine
+                        key={`auto-dim-${w.id}`}
+                        dim={{ id: `auto-${w.id}`, x1: w.x1 + nx, y1: w.y1 + ny, x2: w.x2 + nx, y2: w.y2 + ny }}
+                        canvasScale={canvasScale}
+                        theme={theme}
+                        unit={unit}
+                        showDual={showDual}
+                        isSelected={false}
+                        interactive={false}
+                        roughMode={roughMode}
+                    />
+                );
+            })}
+
+            {/* Text annotations */}
+            {annotations.map(ann => (
+                <Group
+                    key={ann.id}
+                    x={ann.x / canvasScale}
+                    y={ann.y / canvasScale}
+                    rotation={ann.rotation || 0}
+                    draggable={tool === 'select'}
+                    onClick={(e) => { if (tool === 'select') { e.cancelBubble = true; setSelectedId(ann.id); } }}
+                    onDblClick={() => {
+                        if (tool !== 'select') return;
+                        const newText = window.prompt('Edit annotation:', ann.text);
+                        if (newText !== null && newText.trim()) {
+                            updateAnnotation(ann.id, { text: newText.trim() });
+                        }
+                    }}
+                    onDragEnd={(e) => {
+                        if (tool !== 'select') return;
+                        updateAnnotation(ann.id, {
+                            x: e.target.x() * canvasScale,
+                            y: e.target.y() * canvasScale
+                        });
+                    }}
+                >
+                    <Text
+                        text={ann.text}
+                        fontSize={ann.fontSize || 14}
+                        fill={selectedId === ann.id ? theme.accent : (ann.color || theme.text)}
+                        fontStyle={ann.fontStyle || 'normal'}
+                    />
+                    {/* Wider invisible hit area */}
+                    <Rect
+                        width={Math.max(80, (ann.text || '').length * (ann.fontSize || 14) * 0.6)}
+                        height={(ann.fontSize || 14) + 6}
+                        fill="transparent"
+                        y={-3}
+                    />
+                </Group>
+            ))}
         </Group>
     );
 };

@@ -11,8 +11,13 @@ node_modules
 dist
 dist-ssr
 dist_electron
+dist_electron_*
 out
 *.local
+coverage
+*.tsbuildinfo
+.env
+.env.*
 
 # Editor directories and files
 .vscode/*
@@ -29,3 +34,5 @@ out
 eslint.txt
 eslint_output.txt
 resize.ps1
+release
+*.exe
