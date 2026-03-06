@@ -31,6 +31,15 @@ export const shoelaceArea = (points) => {
 // Canvas-based Pattern Generator
 export const createPattern = (type, color) => {
     if (typeof window === 'undefined') return null;
+    const dataUrl = createPatternDataUrl(type, color);
+    if (!dataUrl) return null;
+    const img = new window.Image();
+    img.src = dataUrl;
+    return img;
+};
+
+export const createPatternDataUrl = (type, color) => {
+    if (typeof window === 'undefined') return null;
     const canvas = document.createElement('canvas');
     canvas.width = 20;
     canvas.height = 20;
@@ -50,7 +59,5 @@ export const createPattern = (type, color) => {
         ctx.strokeRect(0, 0, 20, 20);
     }
 
-    const img = new window.Image();
-    img.src = canvas.toDataURL();
-    return img;
+    return canvas.toDataURL();
 };

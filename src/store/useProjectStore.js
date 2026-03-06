@@ -2,8 +2,60 @@ import { create } from 'zustand';
 
 let _lastSaveTime = 0;
 const DEBOUNCE_MS = 300;
+const CONNECTION_EPSILON = 1;
 
 const RECENT_KEY = 'swiftplandd.recentProjects';
+
+const getHistorySnapshot = (state, label) => ({
+    walls: state.walls,
+    openings: state.openings,
+    furniture: state.furniture,
+    rooms: state.rooms,
+    dimensions: state.dimensions,
+    annotations: state.annotations,
+    _label: label || 'Edit'
+});
+
+const createEmptyFloorContent = () => ({
+    walls: [],
+    openings: [],
+    furniture: [],
+    rooms: [],
+    dimensions: [],
+    annotations: [],
+    tracing: null
+});
+
+const getFloorSnapshot = (state) => ({
+    walls: state.walls,
+    openings: state.openings,
+    furniture: state.furniture,
+    rooms: state.rooms,
+    dimensions: state.dimensions,
+    annotations: state.annotations,
+    tracing: state.tracing
+});
+
+const matchesPoint = (point, target) => {
+    if (!point || !target) return false;
+    return Math.hypot(point.x - target.x, point.y - target.y) <= CONNECTION_EPSILON;
+};
+
+const translateWallFields = (wall, dx, dy) => {
+    const updates = {
+        x1: wall.x1 + dx,
+        y1: wall.y1 + dy,
+        x2: wall.x2 + dx,
+        y2: wall.y2 + dy
+    };
+
+    if (wall.arcMidX != null && wall.arcMidY != null) {
+        updates.arcMidX = wall.arcMidX + dx;
+        updates.arcMidY = wall.arcMidY + dy;
+    }
+
+    return updates;
+};
 
 function getRecentProjects() {
     try {
@@ -26,18 +78,20 @@ export const useProjectStore = create((set, get) => ({
     rooms: [],
     dimensions: [],
     annotations: [],
+    tracing: null,
+    globalTracing: null,
 
     // Floor management
     floors: [{ id: 'floor-0', name: 'Ground Floor' }],
     currentFloorId: 'floor-0',
-    floorData: {}, // Map of floorId -> { walls, openings, furniture, rooms, dimensions, annotations }
+    floorData: {}, // Map of floorId -> { walls, openings, furniture, rooms, dimensions, annotations, tracing }
 
     past: [],
     future: [],
 
     saveState: (label) => {
         const state = get();
-        const current = { walls: state.walls, openings: state.openings, furniture: state.furniture, rooms: state.rooms, dimensions: state.dimensions, annotations: state.annotations, _label: label || 'Edit' };
+        const current = getHistorySnapshot(state, label);
         const newPast = [...state.past, current].slice(-50);
         _lastSaveTime = Date.now();
         set({ past: newPast, future: [] });
@@ -65,7 +119,7 @@ export const useProjectStore = create((set, get) => ({
         if (state.past.length === 0) return state;
         const newPast = [...state.past];
         const previous = newPast.pop();
-        const current = { walls: state.walls, openings: state.openings, furniture: state.furniture, rooms: state.rooms, dimensions: state.dimensions, annotations: state.annotations };
+        const current = getHistorySnapshot(state);
         return {
             ...previous,
             past: newPast,
@@ -77,7 +131,7 @@ export const useProjectStore = create((set, get) => ({
         if (state.future.length === 0) return state;
         const newFuture = [...state.future];
         const next = newFuture.pop();
-        const current = { walls: state.walls, openings: state.openings, furniture: state.furniture, rooms: state.rooms, dimensions: state.dimensions, annotations: state.annotations };
+        const current = getHistorySnapshot(state);
         return {
             ...next,
             past: [...state.past, current],
@@ -92,6 +146,89 @@ export const useProjectStore = create((set, get) => ({
         get()._saveIfNotRecent('Move Wall'); set((state) => ({
             walls: state.walls.map(w => w.id === id ? { ...w, ...updates } : w)
         }));
+    },
+    moveWallEndpoint: (wallId, endpoint, newX, newY) => {
+        get()._saveIfNotRecent('Edit Wall Geometry');
+        set((state) => {
+            const movedWall = state.walls.find(wall => wall.id === wallId);
+            if (!movedWall) return state;
+
+            const oldPoint = endpoint === 'p1'
+                ? { x: movedWall.x1, y: movedWall.y1 }
+                : { x: movedWall.x2, y: movedWall.y2 };
+
+            return {
+                walls: state.walls.map((wall) => {
+                    const nextWall = { ...wall };
+
+                    if (wall.id === wallId) {
+                        if (endpoint === 'p1') {
+                            nextWall.x1 = newX;
+                            nextWall.y1 = newY;
+                        } else {
+                            nextWall.x2 = newX;
+                            nextWall.y2 = newY;
+                        }
+                        return nextWall;
+                    }
+
+                    if (matchesPoint({ x: wall.x1, y: wall.y1 }, oldPoint)) {
+                        nextWall.x1 = newX;
+                        nextWall.y1 = newY;
+                    }
+
+                    if (matchesPoint({ x: wall.x2, y: wall.y2 }, oldPoint)) {
+                        nextWall.x2 = newX;
+                        nextWall.y2 = newY;
+                    }
+
+                    return nextWall;
+                })
+            };
+        });
+    },
+    moveWall: (wallId, dx, dy) => {
+        if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) return;
+        get()._saveIfNotRecent('Move Wall');
+        set((state) => {
+            const movedWall = state.walls.find(wall => wall.id === wallId);
+            if (!movedWall) return state;
+
+            const oldP1 = { x: movedWall.x1, y: movedWall.y1 };
+            const oldP2 = { x: movedWall.x2, y: movedWall.y2 };
+
+            return {
+                walls: state.walls.map((wall) => {
+                    if (wall.id === wallId) {
+                        return { ...wall, ...translateWallFields(wall, dx, dy) };
+                    }
+
+                    const nextWall = { ...wall };
+
+                    if (matchesPoint({ x: wall.x1, y: wall.y1 }, oldP1)) {
+                        nextWall.x1 = wall.x1 + dx;
+                        nextWall.y1 = wall.y1 + dy;
+                    }
+
+                    if (matchesPoint({ x: wall.x2, y: wall.y2 }, oldP1)) {
+                        nextWall.x2 = wall.x2 + dx;
+                        nextWall.y2 = wall.y2 + dy;
+                    }
+
+                    if (matchesPoint({ x: wall.x1, y: wall.y1 }, oldP2)) {
+                        nextWall.x1 = wall.x1 + dx;
+                        nextWall.y1 = wall.y1 + dy;
+                    }
+
+                    if (matchesPoint({ x: wall.x2, y: wall.y2 }, oldP2)) {
+                        nextWall.x2 = wall.x2 + dx;
+                        nextWall.y2 = wall.y2 + dy;
+                    }
+
+                    return nextWall;
+                })
+            };
+        });
     },
 
     addOpening: (opening) => { get().saveState('Add Opening'); set((state) => ({ openings: [...state.openings, opening] })); },
@@ -146,17 +283,51 @@ export const useProjectStore = create((set, get) => ({
         }));
     },
 
-    clearAll: () => { get().saveState('Clear All'); set({ walls: [], openings: [], furniture: [], rooms: [], dimensions: [], annotations: [], floors: [{ id: 'floor-0', name: 'Ground Floor' }], currentFloorId: 'floor-0', floorData: {} }); },
+    setCurrentFloorTracing: (tracing) => {
+        set({ tracing });
+    },
+    updateCurrentFloorTracing: (updates) => {
+        set((state) => ({ tracing: state.tracing ? { ...state.tracing, ...updates } : state.tracing }));
+    },
+    clearCurrentFloorTracing: () => {
+        set({ tracing: null });
+    },
+    setGlobalTracing: (tracing) => {
+        set({ globalTracing: tracing });
+    },
+    updateGlobalTracing: (updates) => {
+        set((state) => ({ globalTracing: state.globalTracing ? { ...state.globalTracing, ...updates } : state.globalTracing }));
+    },
+    clearGlobalTracing: () => {
+        set({ globalTracing: null });
+    },
+
+    clearAll: () => {
+        get().saveState('Clear All');
+        set({
+            walls: [],
+            openings: [],
+            furniture: [],
+            rooms: [],
+            dimensions: [],
+            annotations: [],
+            tracing: null,
+            globalTracing: null,
+            floors: [{ id: 'floor-0', name: 'Ground Floor' }],
+            currentFloorId: 'floor-0',
+            floorData: {}
+        });
+    },
 
     // Floor management
     switchFloor: (targetFloorId) => {
         const state = get();
         if (targetFloorId === state.currentFloorId) return;
         // Save current floor's data
-        const currentData = { walls: state.walls, openings: state.openings, furniture: state.furniture, rooms: state.rooms, dimensions: state.dimensions, annotations: state.annotations };
+        const currentData = getFloorSnapshot(state);
         const newFloorData = { ...state.floorData, [state.currentFloorId]: currentData };
         // Load target floor's data 
-        const target = newFloorData[targetFloorId] || { walls: [], openings: [], furniture: [], rooms: [], dimensions: [], annotations: [] };
+        const target = newFloorData[targetFloorId] || createEmptyFloorContent();
         set({
             currentFloorId: targetFloorId,
             floorData: newFloorData,
@@ -166,6 +337,7 @@ export const useProjectStore = create((set, get) => ({
             rooms: target.rooms,
             dimensions: target.dimensions,
             annotations: target.annotations,
+            tracing: target.tracing || null,
             past: [],
             future: []
         });
@@ -204,15 +376,15 @@ export const useProjectStore = create((set, get) => ({
     getFloorData: (floorId) => {
         const state = get();
         if (floorId === state.currentFloorId) {
-            return { walls: state.walls, openings: state.openings, furniture: state.furniture, rooms: state.rooms };
+            return getFloorSnapshot(state);
         }
-        return state.floorData[floorId] || { walls: [], openings: [], furniture: [], rooms: [] };
+        return state.floorData[floorId] || createEmptyFloorContent();
     },
 
     exportProject: () => {
         const state = get();
         // Save current floor data before exporting
-        const currentData = { walls: state.walls, openings: state.openings, furniture: state.furniture, rooms: state.rooms, dimensions: state.dimensions, annotations: state.annotations };
+        const currentData = getFloorSnapshot(state);
         const allFloorData = { ...state.floorData, [state.currentFloorId]: currentData };
         const data = {
             walls: state.walls,
@@ -221,6 +393,8 @@ export const useProjectStore = create((set, get) => ({
             rooms: state.rooms,
             dimensions: state.dimensions,
             annotations: state.annotations,
+            tracing: state.tracing,
+            globalTracing: state.globalTracing,
             floors: state.floors,
             currentFloorId: state.currentFloorId,
             floorData: allFloorData
@@ -241,6 +415,10 @@ export const useProjectStore = create((set, get) => ({
     importProject: (data, filename) => {
         get().saveState('Import Project');
         if (filename) addRecentProject(filename, data);
+        const floors = Array.isArray(data.floors) ? data.floors : [{ id: 'floor-0', name: 'Ground Floor' }];
+        const currentFloorId = data.currentFloorId || floors[0]?.id || 'floor-0';
+        const floorData = data.floorData || {};
+        const currentFloorData = floorData[currentFloorId] || createEmptyFloorContent();
         set({
             walls: Array.isArray(data.walls) ? data.walls : [],
             openings: Array.isArray(data.openings) ? data.openings : [],
@@ -248,9 +426,11 @@ export const useProjectStore = create((set, get) => ({
             rooms: Array.isArray(data.rooms) ? data.rooms : [],
             dimensions: Array.isArray(data.dimensions) ? data.dimensions : [],
             annotations: Array.isArray(data.annotations) ? data.annotations : [],
-            floors: Array.isArray(data.floors) ? data.floors : [{ id: 'floor-0', name: 'Ground Floor' }],
-            currentFloorId: data.currentFloorId || 'floor-0',
-            floorData: data.floorData || {}
+            tracing: currentFloorData.tracing ?? data.tracing ?? null,
+            globalTracing: data.globalTracing || null,
+            floors,
+            currentFloorId,
+            floorData
         });
     },
 

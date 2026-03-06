@@ -28,7 +28,7 @@ export const HelpModal = ({ onClose }) => {
 
                 <h3 style={{ fontSize: '1rem', marginBottom: '8px' }}>Drawing Basics</h3>
                 <ul style={{ paddingLeft: '20px', fontSize: '0.9rem', marginBottom: '20px', lineHeight: '1.5', color: theme.text }}>
-                    <li><strong>Walls:</strong> Click the Wall tool. Click once to start a wall, move your mouse, and click again to place the corner. Ensure the length is at least a few mm.</li>
+                    <li><strong>Walls:</strong> Click the Wall tool. Click once to start a wall, move your mouse, and click again to place the corner. Hold <strong>Shift</strong> for 45° snapping or toggle <strong>Ortho</strong> with <strong>O</strong> for only horizontal and vertical walls.</li>
                     <li><strong>Rooms:</strong> Click the Room tool. Trace the inner corners of an enclosed space. The room will automatically fill when you connect back near the start point.</li>
                     <li><strong>Doors & Windows:</strong> Click the Door or Window tool and click anywhere on an existing Wall to insert an opening. You can adjust the exact Width and Flip direction in the Inspector.</li>
                 </ul>
@@ -43,7 +43,8 @@ export const HelpModal = ({ onClose }) => {
 
                 <h3 style={{ fontSize: '1rem', marginBottom: '8px' }}>Properties & Exporting</h3>
                 <ul style={{ paddingLeft: '20px', fontSize: '0.9rem', lineHeight: '1.5', color: theme.text }}>
-                    <li><strong>Inspector:</strong> Select any element to edit its exact dimensions, text labels, and visual properties.</li>
+                    <li><strong>Inspector:</strong> Select any element to edit its exact dimensions, text labels, wall angles, and visual properties.</li>
+                    <li><strong>Tracing Images:</strong> Import a tracing as a floor-specific underlay or as a shared underlay for all floors, then fine-tune opacity, scale, and offset in the Inspector.</li>
                     <li><strong>Exporting:</strong> Use the Header icons to Save your project (.swift.json), or export as PNG, PDF, or Draw.io XML.</li>
                 </ul>
             </div>

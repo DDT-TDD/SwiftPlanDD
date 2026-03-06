@@ -3,7 +3,7 @@
   "description": "SwiftPlanDD is a desktop 2D floor planning application built with React, Konva, and Electron.",
   "author": "DD",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "license": "MIT",
   "type": "module",
   "main": "electron.cjs",

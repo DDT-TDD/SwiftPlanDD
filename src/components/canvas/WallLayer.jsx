@@ -1,20 +1,23 @@
+import { memo, useCallback, useMemo } from 'react';
 import { Group, Line, Rect, Circle, Text, Arc, Path } from 'react-konva';
 import { getDistance, getAngle, getPointAtOffset, getProjectedDistance } from '../../utils/geometry';
-import { DEFAULT_WALL_THICKNESS, THEMES, SNAP_THRESHOLD } from '../../utils/constants';
+import { DEFAULT_WALL_THICKNESS, THEMES } from '../../utils/constants';
 import { formatValue } from '../../utils/units';
-import { getRoughLinePath } from '../../utils/roughUtils';
+import { getRoughLinePath, getStableRoughSeed } from '../../utils/roughUtils';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useEditorStore } from '../../store/useEditorStore';
 
-const Opening = ({ opening, wall, onSelect, isSelected, canvasScale, theme, interactive = true, roughMode = false, onDragEnd }) => {
+const Opening = memo(({ opening, wall, onSelect, isSelected, canvasScale, theme, interactive = true, roughMode = false, onDragEnd }) => {
+    const roughLine = useMemo(() => (
+        roughMode ? getRoughLinePath(0, 0, 0, -(opening.width / canvasScale), { seed: getStableRoughSeed(opening.id) }) : null
+    ), [canvasScale, opening.id, opening.width, roughMode]);
+
     if (!wall) return null;
     const p1 = { x: wall.x1 / canvasScale, y: wall.y1 / canvasScale };
     const p2 = { x: wall.x2 / canvasScale, y: wall.y2 / canvasScale };
     const pos = getPointAtOffset(p1, p2, opening.offset / canvasScale);
     const angle = getAngle(p1, p2);
     const widthPx = opening.width / canvasScale;
-
-    const roughLine = roughMode ? getRoughLinePath(0, 0, 0, -widthPx) : null;
 
     return (
         <Group
@@ -61,14 +64,16 @@ const Opening = ({ opening, wall, onSelect, isSelected, canvasScale, theme, inte
             )}
         </Group>
     );
-};
+});
 
-const Wall = ({ wall, openings = [], onSelect, isSelected, canvasScale, stageScale, theme, unit, showDual, interactive = true, roughMode = false, wallLabelPosition = 'center', onEndpointDrag }) => {
+const Wall = memo(({ wall, openings = [], onSelect, isSelected, canvasScale, stageScale, theme, unit, showDual, interactive = true, roughMode = false, wallLabelPosition = 'center', onEndpointDrag, onWallDragEnd }) => {
     const activeLabelPosition = wall.labelPosition || wallLabelPosition;
-    const p1 = { x: wall.x1 / canvasScale, y: wall.y1 / canvasScale };
-    const p2 = { x: wall.x2 / canvasScale, y: wall.y2 / canvasScale };
+    const p1 = useMemo(() => ({ x: wall.x1 / canvasScale, y: wall.y1 / canvasScale }), [canvasScale, wall.x1, wall.y1]);
+    const p2 = useMemo(() => ({ x: wall.x2 / canvasScale, y: wall.y2 / canvasScale }), [canvasScale, wall.x2, wall.y2]);
     const isArc = wall.arcMidX != null && wall.arcMidY != null;
-    const arcMid = isArc ? { x: wall.arcMidX / canvasScale, y: wall.arcMidY / canvasScale } : null;
+    const arcMid = useMemo(() => (
+        isArc ? { x: wall.arcMidX / canvasScale, y: wall.arcMidY / canvasScale } : null
+    ), [canvasScale, isArc, wall.arcMidX, wall.arcMidY]);
 
     const wallDistLogical = getDistance({ x: wall.x1, y: wall.y1 }, { x: wall.x2, y: wall.y2 });
     const wallDistPx = getDistance(p1, p2);
@@ -77,7 +82,7 @@ const Wall = ({ wall, openings = [], onSelect, isSelected, canvasScale, stageSca
     const thicknessPx = Math.max(1 / stageScale, logicalThicknessPx);
 
     // Generate arc points (quadratic bezier approximation with 32 segments)
-    const arcPoints = isArc ? (() => {
+    const arcPoints = useMemo(() => (isArc ? (() => {
         const pts = [];
         const steps = 32;
         for (let i = 0; i <= steps; i++) {
@@ -88,9 +93,9 @@ const Wall = ({ wall, openings = [], onSelect, isSelected, canvasScale, stageSca
             pts.push(x, y);
         }
         return pts;
-    })() : null;
+    })() : null), [arcMid, isArc, p1, p2]);
 
-    const segments = (() => {
+    const segments = useMemo(() => {
         if (openings.length === 0) return [[p1.x, p1.y, p2.x, p2.y]];
         const sortedOpenings = [...openings].sort((a, b) => a.offset - b.offset);
         const result = [];
@@ -109,21 +114,33 @@ const Wall = ({ wall, openings = [], onSelect, isSelected, canvasScale, stageSca
             result.push([segStart.x, segStart.y, p2.x, p2.y]);
         }
         return result;
-    })();
+    }, [canvasScale, openings, p1, p2, wallDistPx]);
 
     const lengthDisplay = formatValue(wallDistLogical, unit, showDual);
 
-    const roughSegments = (() => {
+    const roughSegments = useMemo(() => {
         if (!roughMode) return [];
-        return segments.map(pts => getRoughLinePath(pts[0], pts[1], pts[2], pts[3]));
-    })();
+        return segments.map((pts, index) => getRoughLinePath(pts[0], pts[1], pts[2], pts[3], {
+            seed: getStableRoughSeed(`${wall.id}:${index}`)
+        }));
+    }, [roughMode, segments, wall.id]);
 
     return (
-        <Group onClick={(e) => { if (!interactive) return; e.cancelBubble = true; onSelect(wall.id); }}>
+        <Group
+            draggable={interactive && isSelected}
+            onClick={(e) => { if (!interactive) return; e.cancelBubble = true; onSelect(wall.id); }}
+            onDragEnd={(e) => {
+                if (!interactive || !isSelected || !onWallDragEnd) return;
+                const dx = e.target.x() * canvasScale;
+                const dy = e.target.y() * canvasScale;
+                onWallDragEnd(wall.id, dx, dy);
+                e.target.position({ x: 0, y: 0 });
+            }}
+        >
             {isArc ? (
                 <>
                     <Line points={arcPoints} stroke={isSelected ? theme.wallSelected : theme.wall} strokeWidth={thicknessPx} lineCap="round" lineJoin="round" />
-                    <Line points={arcPoints} stroke="transparent" strokeWidth={30} />
+                    <Line points={arcPoints} stroke="transparent" strokeWidth={Math.max(thicknessPx, 20 / stageScale)} />
                 </>
             ) : (
                 <>
@@ -134,7 +151,7 @@ const Wall = ({ wall, openings = [], onSelect, isSelected, canvasScale, stageSca
                             <Line key={i} points={points} stroke={isSelected ? theme.wallSelected : theme.wall} strokeWidth={thicknessPx} lineCap="square" />
                         )
                     ))}
-                    <Line points={[p1.x, p1.y, p2.x, p2.y]} stroke="transparent" strokeWidth={30} />
+                    <Line points={[p1.x, p1.y, p2.x, p2.y]} stroke="transparent" strokeWidth={Math.max(thicknessPx, 20 / stageScale)} />
                 </>
             )}
             {activeLabelPosition !== 'hidden' && (
@@ -147,19 +164,21 @@ const Wall = ({ wall, openings = [], onSelect, isSelected, canvasScale, stageSca
                 <>
                     <Circle x={p1.x} y={p1.y} radius={6 / stageScale} fill={theme.wallSelected} stroke={theme.bg} strokeWidth={1 / stageScale} draggable
                         onDragMove={(e) => {
+                            e.cancelBubble = true;
                             const x = e.target.x() * canvasScale;
                             const y = e.target.y() * canvasScale;
                             if (onEndpointDrag) onEndpointDrag(wall.id, 'p1', x, y);
                         }}
-                        onDragEnd={(e) => { e.target.x(p1.x); e.target.y(p1.y); }}
+                        onDragEnd={(e) => { e.cancelBubble = true; e.target.x(p1.x); e.target.y(p1.y); }}
                     />
                     <Circle x={p2.x} y={p2.y} radius={6 / stageScale} fill={theme.wallSelected} stroke={theme.bg} strokeWidth={1 / stageScale} draggable
                         onDragMove={(e) => {
+                            e.cancelBubble = true;
                             const x = e.target.x() * canvasScale;
                             const y = e.target.y() * canvasScale;
                             if (onEndpointDrag) onEndpointDrag(wall.id, 'p2', x, y);
                         }}
-                        onDragEnd={(e) => { e.target.x(p2.x); e.target.y(p2.y); }}
+                        onDragEnd={(e) => { e.cancelBubble = true; e.target.x(p2.x); e.target.y(p2.y); }}
                     />
                 </>
             )}
@@ -171,12 +190,13 @@ const Wall = ({ wall, openings = [], onSelect, isSelected, canvasScale, stageSca
             )}
         </Group>
     );
-};
+});
 
-export const WallLayer = () => {
+export const WallLayer = memo(() => {
     const walls = useProjectStore(state => state.walls);
     const openings = useProjectStore(state => state.openings);
-    const updateWall = useProjectStore(state => state.updateWall);
+    const moveWallEndpoint = useProjectStore(state => state.moveWallEndpoint);
+    const moveWall = useProjectStore(state => state.moveWall);
     const updateOpening = useProjectStore(state => state.updateOpening);
 
     const canvasScale = useEditorStore(state => state.canvasScale);
@@ -190,33 +210,51 @@ export const WallLayer = () => {
     const tool = useEditorStore(state => state.tool);
     const activeObject = useEditorStore(state => state.activeObject);
     const roughMode = useEditorStore(state => state.roughMode);
+    const showWallDiagnostics = useEditorStore(state => state.showWallDiagnostics);
 
     const theme = THEMES[themeName];
 
-    // Wall topology: when dragging an endpoint, also move connected wall endpoints
-    const handleEndpointDrag = (wallId, endpoint, newX, newY) => {
-        const movedWall = walls.find(w => w.id === wallId);
-        if (!movedWall) return;
-        const oldX = endpoint === 'p1' ? movedWall.x1 : movedWall.x2;
-        const oldY = endpoint === 'p1' ? movedWall.y1 : movedWall.y2;
-
-        // Update the dragged wall
-        if (endpoint === 'p1') {
-            updateWall(wallId, { x1: newX, y1: newY });
-        } else {
-            updateWall(wallId, { x2: newX, y2: newY });
+    const openingsByWall = useMemo(() => openings.reduce((grouped, opening) => {
+        if (!grouped[opening.wallId]) {
+            grouped[opening.wallId] = [];
         }
+        grouped[opening.wallId].push(opening);
+        return grouped;
+    }, {}), [openings]);
 
-        // Find and update connected walls (share the same old endpoint within snap threshold)
-        const thresh = SNAP_THRESHOLD * canvasScale;
-        walls.forEach(w => {
-            if (w.id === wallId) return;
-            const d1 = Math.hypot(w.x1 - oldX, w.y1 - oldY);
-            const d2 = Math.hypot(w.x2 - oldX, w.y2 - oldY);
-            if (d1 < thresh) updateWall(w.id, { x1: newX, y1: newY });
-            if (d2 < thresh) updateWall(w.id, { x2: newX, y2: newY });
+    const wallById = useMemo(() => Object.fromEntries(walls.map((wall) => [wall.id, wall])), [walls]);
+
+    const diagnostics = useMemo(() => {
+        if (!showWallDiagnostics || walls.length === 0) return [];
+        const points = new Map();
+
+        const register = (x, y) => {
+            const key = `${Math.round(x)}:${Math.round(y)}`;
+            const existing = points.get(key);
+            if (existing) {
+                existing.count += 1;
+                return;
+            }
+            points.set(key, { x, y, count: 1 });
+        };
+
+        walls.forEach((wall) => {
+            register(wall.x1, wall.y1);
+            register(wall.x2, wall.y2);
         });
-    };
+
+        return Array.from(points.values());
+    }, [showWallDiagnostics, walls]);
+
+    const handleEndpointDrag = useCallback((wallId, endpoint, newX, newY) => {
+        moveWallEndpoint(wallId, endpoint, newX, newY);
+    }, [moveWallEndpoint]);
+
+    const handleOpeningDragEnd = useCallback((id, wall, px, py) => {
+        if (!wall) return;
+        const newOffset = getProjectedDistance({ x: px, y: py }, { x: wall.x1, y: wall.y1 }, { x: wall.x2, y: wall.y2 });
+        updateOpening(id, { offset: newOffset });
+    }, [updateOpening]);
 
     return (
         <Group>
@@ -231,15 +269,16 @@ export const WallLayer = () => {
                     showDual={showDual}
                     isSelected={selectedId === w.id}
                     onSelect={setSelectedId}
-                    openings={openings.filter(o => o.wallId === w.id)}
+                    openings={openingsByWall[w.id] || []}
                     interactive={tool === 'select'}
                     roughMode={roughMode}
                     wallLabelPosition={wallLabelPosition}
                     onEndpointDrag={handleEndpointDrag}
+                    onWallDragEnd={moveWall}
                 />
             ))}
             {openings.map(o => {
-                const wall = walls.find(w => w.id === o.wallId);
+                const wall = wallById[o.wallId];
                 return (
                     <Opening
                         key={o.id}
@@ -251,12 +290,7 @@ export const WallLayer = () => {
                         onSelect={setSelectedId}
                         interactive={tool === 'select'}
                         roughMode={roughMode}
-                        onDragEnd={(id, px, py) => {
-                            if (wall) {
-                                const newOffset = getProjectedDistance({ x: px, y: py }, { x: wall.x1, y: wall.y1 }, { x: wall.x2, y: wall.y2 });
-                                updateOpening(id, { offset: newOffset });
-                            }
-                        }}
+                        onDragEnd={(id, px, py) => handleOpeningDragEnd(id, wall, px, py)}
                     />
                 );
             })}
@@ -288,6 +322,33 @@ export const WallLayer = () => {
                     wallLabelPosition={wallLabelPosition}
                 />
             )}
+            {diagnostics.map((point, index) => {
+                const isJunction = point.count > 1;
+                return (
+                    <Group key={`diag-${index}`} x={point.x / canvasScale} y={point.y / canvasScale} listening={false}>
+                        <Circle
+                            radius={isJunction ? (7 / stageScale) : (5 / stageScale)}
+                            fill={isJunction ? '#f97316' : '#22c55e'}
+                            opacity={0.85}
+                            stroke={theme.bg}
+                            strokeWidth={1 / stageScale}
+                        />
+                        {isJunction && (
+                            <Text
+                                text={String(point.count)}
+                                fontSize={8 / stageScale}
+                                fill="#ffffff"
+                                align="center"
+                                verticalAlign="middle"
+                                width={14 / stageScale}
+                                height={12 / stageScale}
+                                offsetX={7 / stageScale}
+                                offsetY={6 / stageScale}
+                            />
+                        )}
+                    </Group>
+                );
+            })}
         </Group>
     );
-};
+});

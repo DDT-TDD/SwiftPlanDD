@@ -10,13 +10,13 @@ import { HelpModal } from './HelpModal';
 export const Header = () => {
     const [showHelp, setShowHelp] = useState(false);
     const [showPdfOptions, setShowPdfOptions] = useState(false);
+    const [isExportingPdf, setIsExportingPdf] = useState(false);
     const [showRecent, setShowRecent] = useState(false);
+    const [showTracingMenu, setShowTracingMenu] = useState(false);
     const [pdfPaper, setPdfPaper] = useState('a4');
     const [pdfOrientation, setPdfOrientation] = useState('landscape');
     const [pdfScale, setPdfScale] = useState('');
-    const bgUrlRef = useRef(null);
     const themeName = useEditorStore(state => state.themeName);
-    const setBgImageFile = useEditorStore(state => state.setBgImageFile);
     const stageRef = useEditorStore(state => state.stageRef);
     const canvasScale = useEditorStore(state => state.canvasScale);
     const setStagePos = useEditorStore(state => state.setStagePos);
@@ -29,24 +29,41 @@ export const Header = () => {
     const futureLen = useProjectStore(state => state.future.length);
     const undoLabel = pastLen > 0 ? useProjectStore.getState().getUndoLabel() : null;
     const redoLabel = futureLen > 0 ? useProjectStore.getState().getRedoLabel() : null;
+    const tracing = useProjectStore(state => state.tracing);
+    const globalTracing = useProjectStore(state => state.globalTracing);
+    const setCurrentFloorTracing = useProjectStore(state => state.setCurrentFloorTracing);
+    const setGlobalTracing = useProjectStore(state => state.setGlobalTracing);
     const theme = THEMES[themeName];
     const bgInputRef = useRef(null);
     const projectInputRef = useRef(null);
+    const tracingTargetRef = useRef('floor');
 
     useEffect(() => {
-        return () => {
-            if (bgUrlRef.current) {
-                URL.revokeObjectURL(bgUrlRef.current);
-            }
+        if (!showRecent && !showTracingMenu) return;
+        const close = () => {
+            setShowRecent(false);
+            setShowTracingMenu(false);
         };
-    }, []);
-
-    useEffect(() => {
-        if (!showRecent) return;
-        const close = () => setShowRecent(false);
         document.addEventListener('click', close);
         return () => document.removeEventListener('click', close);
-    }, [showRecent]);
+    }, [showRecent, showTracingMenu]);
+
+    const buildTracingPayload = (imageSrc, target) => {
+        const base = target === 'global' ? globalTracing : tracing;
+        return {
+            imageSrc,
+            opacity: base?.opacity ?? 0.3,
+            scale: base?.scale ?? 1,
+            offsetX: base?.offsetX ?? 0,
+            offsetY: base?.offsetY ?? 0
+        };
+    };
+
+    const openTracingFilePicker = (target) => {
+        tracingTargetRef.current = target;
+        setShowTracingMenu(false);
+        bgInputRef.current?.click();
+    };
 
     const fitToView = () => {
         const state = useProjectStore.getState();
@@ -93,6 +110,21 @@ export const Header = () => {
             x: viewportWidth / 2 - ((centerX / canvasScale) * nextScale),
             y: viewportHeight / 2 - ((centerY / canvasScale) * nextScale)
         });
+    };
+
+    const handlePdfExport = async () => {
+        if (isExportingPdf) return;
+        setIsExportingPdf(true);
+        try {
+            await exportToPDF(stageRef, themeName, {
+                paperSize: pdfPaper,
+                orientation: pdfOrientation,
+                scalePreset: pdfScale || null
+            });
+            setShowPdfOptions(false);
+        } finally {
+            setIsExportingPdf(false);
+        }
     };
 
     return (
@@ -159,20 +191,35 @@ export const Header = () => {
                     <Redo2 size={20} />
                 </button>
 
-                <button className="tool-button-small" onClick={() => bgInputRef.current?.click()} style={{ background: 'transparent', border: 'none', color: theme.dim, cursor: 'pointer' }} title="Upload Tracing Image">
-                    <Image size={20} />
-                </button>
+                <div style={{ position: 'relative' }}>
+                    <button className="tool-button-small" onClick={(e) => { e.stopPropagation(); setShowTracingMenu(!showTracingMenu); }} style={{ background: 'transparent', border: 'none', color: theme.dim, cursor: 'pointer' }} title="Upload Tracing Image">
+                        <Image size={20} />
+                    </button>
+                    {showTracingMenu && (
+                        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '4px', background: themeName === 'light' ? '#fff' : '#1e293b', border: `1px solid ${theme.grid}`, borderRadius: '8px', padding: '8px 0', minWidth: '220px', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.15)', zIndex: 200 }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ padding: '4px 12px 8px', fontSize: '0.75rem', color: theme.dim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tracing Scope</div>
+                            <button onClick={() => openTracingFilePicker('floor')} style={{ width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: theme.text, cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}>Upload to current floor</button>
+                            <button onClick={() => openTracingFilePicker('global')} style={{ width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: theme.text, cursor: 'pointer', textAlign: 'left', fontSize: '0.85rem' }}>Upload to all floors</button>
+                        </div>
+                    )}
+                </div>
                 <input type="file" ref={bgInputRef} hidden accept="image/*" onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                        if (bgUrlRef.current) {
-                            URL.revokeObjectURL(bgUrlRef.current);
-                        }
-                        const nextUrl = URL.createObjectURL(file);
-                        bgUrlRef.current = nextUrl;
-                        setBgImageFile(nextUrl);
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const imageSrc = typeof event.target?.result === 'string' ? event.target.result : null;
+                            if (!imageSrc) return;
+
+                            if (tracingTargetRef.current === 'global') {
+                                setGlobalTracing(buildTracingPayload(imageSrc, 'global'));
+                            } else {
+                                setCurrentFloorTracing(buildTracingPayload(imageSrc, 'floor'));
+                            }
+                        };
+                        reader.readAsDataURL(file);
                     }
-                    e.target.value = ''; // Reset
+                    e.target.value = '';
                 }} />
 
                 <div style={{ width: '1px', height: '24px', background: theme.grid, margin: '0 5px' }} />
@@ -235,7 +282,7 @@ export const Header = () => {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
                             <button onClick={() => setShowPdfOptions(false)} style={{ padding: '8px 16px', background: 'transparent', border: `1px solid ${theme.grid}`, color: theme.text, borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
-                            <button onClick={() => { exportToPDF(stageRef, themeName, { paperSize: pdfPaper, orientation: pdfOrientation, scalePreset: pdfScale || null }); setShowPdfOptions(false); }} style={{ padding: '8px 16px', background: theme.accent, border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>Export PDF</button>
+                            <button onClick={handlePdfExport} disabled={isExportingPdf} style={{ padding: '8px 16px', background: theme.accent, border: 'none', color: '#fff', borderRadius: '6px', cursor: isExportingPdf ? 'progress' : 'pointer', fontSize: '0.85rem', opacity: isExportingPdf ? 0.7 : 1 }}>Export PDF</button>
                         </div>
                     </div>
                 </div>

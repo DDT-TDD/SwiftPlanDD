@@ -29,6 +29,16 @@ const opsToPath = (drawable) => {
     return path.trim();
 };
 
+export const getStableRoughSeed = (value) => {
+    const text = String(value ?? 'rough');
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+        hash = ((hash << 5) - hash) + text.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash) + 1;
+};
+
 export const getRoughLinePath = (x1, y1, x2, y2, options = {}) => {
     const drawable = generator.line(x1, y1, x2, y2, { roughness: 1.5, strokeWidth: 2, bowing: 1, ...options });
     return opsToPath(drawable);

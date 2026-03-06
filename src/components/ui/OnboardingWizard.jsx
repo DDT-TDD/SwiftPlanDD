@@ -7,7 +7,7 @@ const STEPS = [
     {
         icon: Box,
         title: 'Draw Walls',
-        description: 'Select the Wall tool (W) and click to place wall endpoints. Hold Shift for angle snapping. Double-click or Escape to finish a chain. Type exact length and angle in the floating input.'
+        description: 'Select the Wall tool (W) and click to place wall endpoints. Hold Shift for 45° snapping, or toggle Ortho mode (O) for horizontal and vertical walls only. Double-click or Escape to finish a chain. Type exact length and angle in the floating input.'
     },
     {
         icon: DoorOpen,

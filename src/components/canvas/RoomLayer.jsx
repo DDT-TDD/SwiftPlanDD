@@ -1,12 +1,12 @@
-import { useMemo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Group, Line, Text, Path } from 'react-konva';
 import { THEMES } from '../../utils/constants';
-import { createPattern } from '../../utils/geometry';
-import { getRoughPolygonPath } from '../../utils/roughUtils';
+import { createPatternDataUrl } from '../../utils/geometry';
+import { getRoughPolygonPath, getStableRoughSeed } from '../../utils/roughUtils';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useEditorStore } from '../../store/useEditorStore';
 
-export const RoomLayer = () => {
+export const RoomLayer = memo(() => {
     const rooms = useProjectStore(state => state.rooms);
 
     const themeName = useEditorStore(state => state.themeName);
@@ -20,15 +20,38 @@ export const RoomLayer = () => {
     const roughMode = useEditorStore(state => state.roughMode);
 
     const theme = THEMES[themeName];
+    const [patterns, setPatterns] = useState({ solid: null, diagonal: null, crosshatch: null, grid: null });
 
-    const patterns = useMemo(() => {
-        return {
-            solid: null,
-            diagonal: createPattern('diagonal', theme.dim),
-            crosshatch: createPattern('crosshatch', theme.dim),
-            grid: createPattern('grid', theme.dim)
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadPattern = (type) => new Promise((resolve) => {
+            const src = createPatternDataUrl(type, theme.dim);
+            if (!src) {
+                resolve(null);
+                return;
+            }
+
+            const img = new window.Image();
+            img.onload = () => resolve(cancelled ? null : img);
+            img.onerror = () => resolve(null);
+            img.src = src;
+        });
+
+        Promise.all([
+            loadPattern('diagonal'),
+            loadPattern('crosshatch'),
+            loadPattern('grid')
+        ]).then(([diagonal, crosshatch, grid]) => {
+            if (!cancelled) {
+                setPatterns({ solid: null, diagonal, crosshatch, grid });
+            }
+        });
+
+        return () => {
+            cancelled = true;
         };
-    }, [theme]);
+    }, [theme.dim]);
 
     return (
         <Group>
@@ -44,7 +67,7 @@ export const RoomLayer = () => {
             {rooms.map(room => {
                 const scaledPoints = room.points.map(p => ({ x: p.x / canvasScale, y: p.y / canvasScale }));
                 const flatPoints = scaledPoints.flatMap(p => [p.x, p.y]);
-                const roughPath = roughMode ? getRoughPolygonPath(scaledPoints) : null;
+                const roughPath = roughMode ? getRoughPolygonPath(scaledPoints, { seed: getStableRoughSeed(room.id) }) : null;
 
                 return (
                     <Group key={room.id} onClick={(e) => { if (tool === 'select') { e.cancelBubble = true; setSelectedId(room.id); } }}>
@@ -106,4 +129,4 @@ export const RoomLayer = () => {
             })}
         </Group>
     );
-};
+});

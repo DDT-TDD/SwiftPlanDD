@@ -1,4 +1,4 @@
-import { MousePointer2, Box, DoorOpen, AppWindow, Layout, Ruler, Type, Spline, Trash2 } from 'lucide-react';
+import { MousePointer2, Box, DoorOpen, AppWindow, Layout, Ruler, Type, Spline, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEditorStore } from '../../store/useEditorStore';
 import { useProjectStore } from '../../store/useProjectStore';
 import { THEMES } from '../../utils/constants';
@@ -21,13 +21,31 @@ export const Sidebar = () => {
     const selectedIds = useEditorStore(state => state.selectedIds);
     const clearSelection = useEditorStore(state => state.clearSelection);
     const themeName = useEditorStore(state => state.themeName);
+    const sidebarCollapsed = useEditorStore(state => state.sidebarCollapsed);
+    const toggleSidebarCollapsed = useEditorStore(state => state.toggleSidebarCollapsed);
 
     const deleteItem = useProjectStore(state => state.deleteItem);
 
     const theme = THEMES[themeName];
+    const panelBg = themeName === 'light' ? '#f1f5f9' : 'rgba(30, 41, 59, 0.9)';
+    const borderStyle = `1px solid ${theme.grid}`;
+
+    if (sidebarCollapsed) {
+        return (
+            <nav style={{ width: '36px', background: panelBg, borderRight: borderStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '12px', flexShrink: 0 }}>
+                <button
+                    onClick={toggleSidebarCollapsed}
+                    title="Expand toolbar"
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px' }}
+                >
+                    <ChevronRight size={18} color={theme.dim} />
+                </button>
+            </nav>
+        );
+    }
 
     return (
-        <nav className="sidebar" style={{ width: '80px', background: themeName === 'light' ? '#f1f5f9' : 'rgba(30, 41, 59, 0.9)', borderRight: `1px solid ${theme.grid}`, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '20px', gap: '20px' }}>
+        <nav className="sidebar" style={{ width: '80px', background: panelBg, borderRight: borderStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '20px', gap: '20px' }}>
             {TOOLS.map(item => (
                 <button
                     key={item.id}
@@ -56,9 +74,16 @@ export const Sidebar = () => {
                     }
                 }}
                 disabled={selectedIds.length === 0 && !selectedId}
-                style={{ marginBottom: '20px', background: 'transparent', border: 'none', cursor: (selectedIds.length > 0 || selectedId) ? 'pointer' : 'default' }}
+                style={{ background: 'transparent', border: 'none', cursor: (selectedIds.length > 0 || selectedId) ? 'pointer' : 'default' }}
             >
                 <Trash2 size={24} color={(selectedIds.length > 0 || selectedId) ? '#ef4444' : theme.dim} />
+            </button>
+            <button
+                onClick={toggleSidebarCollapsed}
+                title="Collapse toolbar"
+                style={{ marginBottom: '12px', background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px' }}
+            >
+                <ChevronLeft size={18} color={theme.dim} />
             </button>
         </nav>
     );

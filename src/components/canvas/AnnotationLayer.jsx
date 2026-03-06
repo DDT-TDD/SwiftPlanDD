@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Group, Line, Rect, Text, Path } from 'react-konva';
 import { getDistance, getAngle } from '../../utils/geometry';
 import { THEMES } from '../../utils/constants';
@@ -7,7 +7,7 @@ import { getRoughLinePath } from '../../utils/roughUtils';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useEditorStore } from '../../store/useEditorStore';
 
-const DimensionLine = ({ dim, canvasScale, theme, unit, showDual, isSelected, onSelect, interactive = true, roughMode = false }) => {
+const DimensionLine = memo(({ dim, canvasScale, stageScale, theme, unit, showDual, isSelected, onSelect, interactive = true, roughMode = false }) => {
     const p1 = { x: dim.x1 / canvasScale, y: dim.y1 / canvasScale };
     const p2 = { x: dim.x2 / canvasScale, y: dim.y2 / canvasScale };
     const logicalDist = getDistance({ x: dim.x1, y: dim.y1 }, { x: dim.x2, y: dim.y2 });
@@ -37,12 +37,12 @@ const DimensionLine = ({ dim, canvasScale, theme, unit, showDual, isSelected, on
                 <Text text={lengthDisplay} fontSize={10} fill={isSelected ? theme.accent : theme.text} width={lengthDisplay.length * 6 + 10} align="center" offsetX={(lengthDisplay.length * 6 + 10) / 2} offsetY={4} />
             </Group>
 
-            <Line points={[p1.x, p1.y, p2.x, p2.y]} stroke="transparent" strokeWidth={20} />
+            <Line points={[p1.x, p1.y, p2.x, p2.y]} stroke="transparent" strokeWidth={Math.max(1, 20 / stageScale)} />
         </Group>
     );
-};
+});
 
-export const AnnotationLayer = () => {
+export const AnnotationLayer = memo(() => {
     const dimensions = useProjectStore(state => state.dimensions);
     const annotations = useProjectStore(state => state.annotations);
     const updateAnnotation = useProjectStore(state => state.updateAnnotation);
@@ -57,6 +57,7 @@ export const AnnotationLayer = () => {
     const tool = useEditorStore(state => state.tool);
     const activeObject = useEditorStore(state => state.activeObject);
     const showAutoDimensions = useEditorStore(state => state.showAutoDimensions);
+    const stageScale = useEditorStore(state => state.stageScale);
 
     const roughMode = useEditorStore(state => state.roughMode);
 
@@ -69,6 +70,7 @@ export const AnnotationLayer = () => {
                     key={d.id}
                     dim={d}
                     canvasScale={canvasScale}
+                    stageScale={stageScale}
                     theme={theme}
                     unit={unit}
                     showDual={showDual}
@@ -83,6 +85,7 @@ export const AnnotationLayer = () => {
                 <DimensionLine
                     dim={activeObject}
                     canvasScale={canvasScale}
+                    stageScale={stageScale}
                     theme={theme}
                     unit={unit}
                     showDual={showDual}
@@ -107,6 +110,7 @@ export const AnnotationLayer = () => {
                         key={`auto-dim-${w.id}`}
                         dim={{ id: `auto-${w.id}`, x1: w.x1 + nx, y1: w.y1 + ny, x2: w.x2 + nx, y2: w.y2 + ny }}
                         canvasScale={canvasScale}
+                        stageScale={stageScale}
                         theme={theme}
                         unit={unit}
                         showDual={showDual}
@@ -158,4 +162,4 @@ export const AnnotationLayer = () => {
             ))}
         </Group>
     );
-};
+});

@@ -36,3 +36,9 @@ eslint_output.txt
 resize.ps1
 release
 *.exe
+
+# Local QA / release notes scratch files
+manual-test-notes.md
+smoke-test-output/
+qa-screenshots/
+release-audit-notes.md

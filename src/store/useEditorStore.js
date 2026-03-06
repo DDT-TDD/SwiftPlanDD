@@ -34,17 +34,14 @@ export const useEditorStore = create((set) => ({
     wallLabelPosition: 'center', // center, inside, outside, hidden
     showAutoDimensions: false,
     showRulers: true,
+    orthoMode: false,
+    showWallDiagnostics: false,
 
     // Viewport
     stagePos: { x: 0, y: 0 },
     stageScale: 1,
     isPanning: false,
     stageRef: null,
-    bgImageFile: null,
-    bgOpacity: 0.3,
-    bgScale: 1,
-    bgOffsetX: 0,
-    bgOffsetY: 0,
 
     // Actions
     setStageRef: (ref) => set({ stageRef: ref }),
@@ -87,13 +84,16 @@ export const useEditorStore = create((set) => ({
     setWallLabelPosition: (wallLabelPosition) => set({ wallLabelPosition }),
     setShowAutoDimensions: (showAutoDimensions) => set({ showAutoDimensions }),
     setShowRulers: (showRulers) => set({ showRulers }),
+    setOrthoMode: (orthoMode) => set({ orthoMode }),
+    setShowWallDiagnostics: (showWallDiagnostics) => set({ showWallDiagnostics }),
 
     setStagePos: (stagePos) => set({ stagePos }),
     setStageScale: (stageScale) => set({ stageScale }),
     setIsPanning: (isPanning) => set({ isPanning }),
-    setBgImageFile: (bgImageFile) => set({ bgImageFile }),
-    setBgOpacity: (bgOpacity) => set({ bgOpacity }),
-    setBgScale: (bgScale) => set({ bgScale }),
-    setBgOffsetX: (bgOffsetX) => set({ bgOffsetX }),
-    setBgOffsetY: (bgOffsetY) => set({ bgOffsetY }),
+
+    // Panel collapse state
+    sidebarCollapsed: false,
+    inspectorCollapsed: false,
+    toggleSidebarCollapsed: () => set(state => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+    toggleInspectorCollapsed: () => set(state => ({ inspectorCollapsed: !state.inspectorCollapsed })),
 }));
