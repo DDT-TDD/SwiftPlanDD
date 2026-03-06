@@ -17,6 +17,7 @@ const SHORTCUTS = [
     ['Ctrl+A', 'Select all elements'],
     ['Ctrl+Shift+Delete', 'Delete all elements'],
     ['Delete', 'Delete selection'],
+    ['O', 'Toggle ortho wall drawing'],
     ['Shift', 'Constrain wall angle (45°)'],
     ['Esc', 'Cancel active drawing / clear selection'],
     ['?', 'Toggle this shortcuts panel']

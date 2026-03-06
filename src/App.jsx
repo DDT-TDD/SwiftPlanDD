@@ -26,6 +26,7 @@ const App = () => {
   const mousePos = useEditorStore(state => state.mousePos);
   const canvasScale = useEditorStore(state => state.canvasScale);
   const selectedIds = useEditorStore(state => state.selectedIds);
+  const orthoMode = useEditorStore(state => state.orthoMode);
   const theme = THEMES[themeName];
 
   const wallsCount = useProjectStore(state => state.walls.length);
@@ -199,14 +200,32 @@ const App = () => {
   useEffect(() => {
     const saveSnapshot = () => {
       const state = useProjectStore.getState();
-      const currentData = { walls: state.walls, openings: state.openings, furniture: state.furniture, rooms: state.rooms, dimensions: state.dimensions, annotations: state.annotations };
+      const currentData = { walls: state.walls, openings: state.openings, furniture: state.furniture, rooms: state.rooms, dimensions: state.dimensions, annotations: state.annotations, tracing: state.tracing };
       const payload = {
         ...currentData,
+        globalTracing: state.globalTracing,
         floors: state.floors,
         currentFloorId: state.currentFloorId,
         floorData: { ...state.floorData, [state.currentFloorId]: currentData }
       };
-      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+
+      try {
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+      } catch {
+        const fallbackPayload = {
+          ...payload,
+          tracing: null,
+          globalTracing: null,
+          floorData: Object.fromEntries(
+            Object.entries(payload.floorData).map(([floorId, floor]) => [floorId, { ...floor, tracing: null }])
+          )
+        };
+        try {
+          localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(fallbackPayload));
+        } catch {
+          // Ignore quota issues and keep the session running.
+        }
+      }
     };
 
     const intervalId = window.setInterval(saveSnapshot, 30000);
@@ -265,6 +284,7 @@ const App = () => {
         if (key === 'm') useEditorStore.getState().setTool('measure');
         if (key === 't') useEditorStore.getState().setTool('text');
         if (key === 'a') useEditorStore.getState().setTool('arc_wall');
+        if (key === 'o') useEditorStore.getState().setOrthoMode(!useEditorStore.getState().orthoMode);
         if (e.key === '?' || (e.shiftKey && e.key === '/')) {
           e.preventDefault();
           setShowShortcuts(prev => !prev);
@@ -300,6 +320,7 @@ const App = () => {
         <FloorManager />
         <span>Tool: {tool}</span>
         <span>Scale: 1:{canvasScale}</span>
+        <span>Ortho: {orthoMode ? 'On' : 'Off'}</span>
         <span>Cursor: {Math.round(mousePos.x)}, {Math.round(mousePos.y)} mm</span>
         <span>Items: {wallsCount + openingsCount + furnitureCount}</span>
         <span>Selected: {selectedIds.length}</span>

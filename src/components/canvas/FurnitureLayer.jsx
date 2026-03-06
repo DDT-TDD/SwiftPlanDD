@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { memo, useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { Group, Rect, Text, Path, Line, Circle, Ellipse, Transformer } from 'react-konva';
 import { THEMES } from '../../utils/constants';
 import { formatValue } from '../../utils/units';
-import { getRoughRectPath } from '../../utils/roughUtils';
+import { getRoughRectPath, getStableRoughSeed } from '../../utils/roughUtils';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useEditorStore } from '../../store/useEditorStore';
 
@@ -11,7 +11,7 @@ const ROTATION_SNAPS = [
     0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180
 ];
 
-const Furniture = ({ item, onSelect, isSelected, canvasScale, onDragStart, onDragEnd, onTransformEnd, theme, unit, interactive = true, roughMode = false, themeName }) => {
+const Furniture = memo(({ item, onSelect, isSelected, canvasScale, onDragStart, onDragEnd, onTransformEnd, theme, unit, interactive = true, roughMode = false, themeName }) => {
     const [isHovered, setIsHovered] = useState(false);
     const nodeRef = useRef(null);
     const trRef = useRef(null);
@@ -22,7 +22,9 @@ const Furniture = ({ item, onSelect, isSelected, canvasScale, onDragStart, onDra
     const clPx = clearance / canvasScale;
     const dimText = `${formatValue(item.width, unit)} x ${formatValue(item.height, unit)}`;
 
-    const roughRect = useMemo(() => roughMode ? getRoughRectPath(0, 0, w, h) : null, [roughMode, w, h]);
+    const roughRect = useMemo(() => (
+        roughMode ? getRoughRectPath(0, 0, w, h, { seed: getStableRoughSeed(item.id) }) : null
+    ), [h, item.id, roughMode, w]);
 
     useEffect(() => {
         if (isSelected && trRef.current && nodeRef.current) {
@@ -172,9 +174,9 @@ const Furniture = ({ item, onSelect, isSelected, canvasScale, onDragStart, onDra
             )}
         </Group>
     );
-};
+});
 
-export const FurnitureLayer = () => {
+export const FurnitureLayer = memo(() => {
     const furniture = useProjectStore(state => state.furniture);
     const updateFurniture = useProjectStore(state => state.updateFurniture);
     const updateFurnitureMany = useProjectStore(state => state.updateFurnitureMany);
@@ -193,11 +195,13 @@ export const FurnitureLayer = () => {
     const theme = THEMES[themeName];
     const dragStartRef = useRef({});
 
-    const handleDragStart = (id, x, y) => {
-        dragStartRef.current[id] = { x, y };
-    };
+    const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-    const handleDragEnd = (id, x, y) => {
+    const handleDragStart = useCallback((id, x, y) => {
+        dragStartRef.current[id] = { x, y };
+    }, []);
+
+    const handleDragEnd = useCallback((id, x, y) => {
         const currentSelectedIds = selectedIds.length > 0 ? selectedIds : (selectedId ? [selectedId] : []);
         const isGroupDrag = currentSelectedIds.length > 1 && currentSelectedIds.includes(id);
 
@@ -216,7 +220,18 @@ export const FurnitureLayer = () => {
 
         updateFurnitureMany(updates);
         dragStartRef.current = {};
-    };
+    }, [furniture, selectedId, selectedIds, updateFurniture, updateFurnitureMany]);
+
+    const handleSelect = useCallback((id, additive) => {
+        if (additive) {
+            toggleSelectedId(id);
+            return;
+        }
+        setSelectedId(id);
+        setSelectedIds([id]);
+    }, [setSelectedId, setSelectedIds, toggleSelectedId]);
+
+    const handleTransformEnd = useCallback((id, updates) => updateFurniture(id, updates), [updateFurniture]);
 
     return (
         <Group>
@@ -227,18 +242,11 @@ export const FurnitureLayer = () => {
                     canvasScale={canvasScale}
                     theme={theme}
                     unit={unit}
-                    isSelected={selectedIds.includes(f.id) || selectedId === f.id}
-                    onSelect={(id, additive) => {
-                        if (additive) {
-                            toggleSelectedId(id);
-                        } else {
-                            setSelectedId(id);
-                            setSelectedIds([id]);
-                        }
-                    }}
+                    isSelected={selectedIdSet.has(f.id) || selectedId === f.id}
+                    onSelect={handleSelect}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
-                    onTransformEnd={(id, updates) => updateFurniture(id, updates)}
+                    onTransformEnd={handleTransformEnd}
                     interactive={tool === 'select'}
                     roughMode={roughMode}
                     themeName={themeName}
@@ -246,4 +254,4 @@ export const FurnitureLayer = () => {
             ))}
         </Group>
     );
-};
+});

@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf';
 import { THEMES } from './constants';
 
 export const exportToPNG = (stageRef) => {
@@ -12,8 +11,9 @@ export const exportToPNG = (stageRef) => {
     document.body.removeChild(link);
 };
 
-export const exportToPDF = (stageRef, themeName = 'light', options = {}) => {
+export const exportToPDF = async (stageRef, themeName = 'light', options = {}) => {
     if (!stageRef) return;
+    const { jsPDF } = await import('jspdf');
     const dataURL = stageRef.toDataURL({ pixelRatio: 2 });
 
     const {

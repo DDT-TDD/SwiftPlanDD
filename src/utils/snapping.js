@@ -5,21 +5,36 @@ export const getSnappedPoint = (logicalPos, walls, zoomScale, gridSpacing) => {
     const snapGrid = (gridSpacing || GRID_SIZE_DEFAULT);
     const threshold = SNAP_THRESHOLD / zoomScale;
 
-    // 1. Snap to wall endpoints
-    for (const wall of walls) {
-        if (getDistance(logicalPos, { x: wall.x1, y: wall.y1 }) < threshold) return { x: wall.x1, y: wall.y1, snapType: 'point' };
-        if (getDistance(logicalPos, { x: wall.x2, y: wall.y2 }) < threshold) return { x: wall.x2, y: wall.y2, snapType: 'point' };
-    }
+    let bestPoint = null;
+    let bestPointDistance = threshold;
+    let bestMidpoint = null;
+    let bestMidpointDistance = threshold;
+    let bestPerpendicular = null;
+    let bestPerpendicularDistance = threshold;
 
-    // 2. Snap to wall midpoints
     for (const wall of walls) {
-        const mx = (wall.x1 + wall.x2) / 2;
-        const my = (wall.y1 + wall.y2) / 2;
-        if (getDistance(logicalPos, { x: mx, y: my }) < threshold) return { x: mx, y: my, snapType: 'midpoint' };
-    }
+        const p1 = { x: wall.x1, y: wall.y1 };
+        const p2 = { x: wall.x2, y: wall.y2 };
 
-    // 3. Snap to perpendicular projection on walls
-    for (const wall of walls) {
+        const p1Distance = getDistance(logicalPos, p1);
+        if (p1Distance < bestPointDistance) {
+            bestPointDistance = p1Distance;
+            bestPoint = { x: wall.x1, y: wall.y1, snapType: 'point' };
+        }
+
+        const p2Distance = getDistance(logicalPos, p2);
+        if (p2Distance < bestPointDistance) {
+            bestPointDistance = p2Distance;
+            bestPoint = { x: wall.x2, y: wall.y2, snapType: 'point' };
+        }
+
+        const midpoint = { x: (wall.x1 + wall.x2) / 2, y: (wall.y1 + wall.y2) / 2 };
+        const midpointDistance = getDistance(logicalPos, midpoint);
+        if (midpointDistance < bestMidpointDistance) {
+            bestMidpointDistance = midpointDistance;
+            bestMidpoint = { ...midpoint, snapType: 'midpoint' };
+        }
+
         const dx = wall.x2 - wall.x1;
         const dy = wall.y2 - wall.y1;
         const l2 = dx * dx + dy * dy;
@@ -28,8 +43,16 @@ export const getSnappedPoint = (logicalPos, walls, zoomScale, gridSpacing) => {
         if (t < 0.05 || t > 0.95) continue; // skip near endpoints (already handled)
         const px = wall.x1 + t * dx;
         const py = wall.y1 + t * dy;
-        if (getDistance(logicalPos, { x: px, y: py }) < threshold) return { x: px, y: py, snapType: 'perpendicular' };
+        const perpendicularDistance = getDistance(logicalPos, { x: px, y: py });
+        if (perpendicularDistance < bestPerpendicularDistance) {
+            bestPerpendicularDistance = perpendicularDistance;
+            bestPerpendicular = { x: px, y: py, snapType: 'perpendicular' };
+        }
     }
+
+    if (bestPoint) return bestPoint;
+    if (bestMidpoint) return bestMidpoint;
+    if (bestPerpendicular) return bestPerpendicular;
 
     // 4. Snap to grid
     return { x: Math.round(logicalPos.x / snapGrid) * snapGrid, y: Math.round(logicalPos.y / snapGrid) * snapGrid, snapType: 'grid' };

@@ -11,6 +11,7 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
             contextIsolation: true,
+            backgroundThrottling: false,
         },
         icon: path.join(__dirname, 'dist', 'icon.png'),
         autoHideMenuBar: true

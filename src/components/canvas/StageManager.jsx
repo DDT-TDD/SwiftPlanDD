@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Stage, Layer, Rect, Line as KonvaLine, Group } from 'react-konva';
 import { useEditorStore } from '../../store/useEditorStore';
 import { useProjectStore } from '../../store/useProjectStore';
@@ -9,14 +9,11 @@ import { WallLayer } from './WallLayer';
 import { FurnitureLayer } from './FurnitureLayer';
 import { AnnotationLayer } from './AnnotationLayer';
 import { RoomLayer } from './RoomLayer';
+import { GridLayer } from './GridLayer';
 import { InteractionLayer } from './InteractionLayer';
 import { Rulers } from './Rulers';
 
 export const StageManager = () => {
-    const SIDEBAR_WIDTH = 80;
-    const INSPECTOR_WIDTH = 300;
-    const HEADER_HEIGHT = 60;
-
     const createId = () => globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const [spaceBarDown, setSpaceBarDown] = useState(false);
@@ -29,10 +26,11 @@ export const StageManager = () => {
     const [isWallLengthEditing, setIsWallLengthEditing] = useState(false);
     const [isWallAngleEditing, setIsWallAngleEditing] = useState(false);
     const [stageSize, setStageSize] = useState({
-        width: Math.max(320, window.innerWidth - (SIDEBAR_WIDTH + INSPECTOR_WIDTH)),
-        height: Math.max(240, window.innerHeight - HEADER_HEIGHT)
+        width: Math.max(320, window.innerWidth - 380),
+        height: Math.max(240, window.innerHeight - 86)
     });
     const stageRef = useRef(null);
+    const containerRef = useRef(null);
 
     const tool = useEditorStore(state => state.tool);
     const activeObject = useEditorStore(state => state.activeObject);
@@ -41,10 +39,10 @@ export const StageManager = () => {
     const setMousePos = useEditorStore(state => state.setMousePos);
 
     const themeName = useEditorStore(state => state.themeName);
-    const showGrid = useEditorStore(state => state.showGrid);
     const gridSpacing = useEditorStore(state => state.gridSpacing);
     const canvasScale = useEditorStore(state => state.canvasScale);
     const wallThickness = useEditorStore(state => state.wallThickness);
+    const orthoMode = useEditorStore(state => state.orthoMode);
 
     const stagePos = useEditorStore(state => state.stagePos);
     const setStagePos = useEditorStore(state => state.setStagePos);
@@ -67,6 +65,7 @@ export const StageManager = () => {
     const addRoom = useProjectStore(state => state.addRoom);
     const addDimension = useProjectStore(state => state.addDimension);
     const addAnnotation = useProjectStore(state => state.addAnnotation);
+    const moveWall = useProjectStore(state => state.moveWall);
 
     const theme = THEMES[themeName];
 
@@ -81,13 +80,13 @@ export const StageManager = () => {
     }, [setMousePos]);
 
     // Ghost floor: show previous floor's walls at low opacity
-    const ghostWalls = (() => {
+    const ghostWalls = useMemo(() => {
         const idx = floors.findIndex(f => f.id === currentFloorId);
         if (idx <= 0) return [];
         const belowFloor = floors[idx - 1];
         const data = getFloorData(belowFloor.id);
         return data.walls || [];
-    })();
+    }, [currentFloorId, floors, getFloorData]);
 
     const constrainToAngle = (from, to) => {
         const dx = to.x - from.x;
@@ -101,6 +100,30 @@ export const StageManager = () => {
             x: from.x + Math.cos(snappedAngle) * distance,
             y: from.y + Math.sin(snappedAngle) * distance
         };
+    };
+
+    const constrainToOrthogonal = (from, to) => {
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+            return { x: to.x, y: from.y };
+        }
+        return { x: from.x, y: to.y };
+    };
+
+    const getWallTargetPoint = (from, to, forceAngleSnap = false) => {
+        if (orthoMode) {
+            return constrainToOrthogonal(from, to);
+        }
+        if (forceAngleSnap) {
+            return constrainToAngle(from, to);
+        }
+        return to;
+    };
+
+    const normalizeWallAngle = (angleDeg) => {
+        if (!orthoMode) return angleDeg;
+        return Math.round(angleDeg / 90) * 90;
     };
 
     const getLogicalPosition = (stage) => {
@@ -135,7 +158,7 @@ export const StageManager = () => {
             { x: activeObject.x2, y: activeObject.y2 }
         );
         const parsedAngle = Number(angleDegInput);
-        const finalAngle = Number.isFinite(parsedAngle) ? parsedAngle : fallbackAngle;
+        const finalAngle = normalizeWallAngle(Number.isFinite(parsedAngle) ? parsedAngle : fallbackAngle);
         const endPoint = getPointAtLengthAndAngle(
             { x: activeObject.x1, y: activeObject.y1 },
             safeLength,
@@ -155,15 +178,16 @@ export const StageManager = () => {
     }, [setStageRef]);
 
     useEffect(() => {
-        const handleResize = () => {
+        const el = containerRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(() => {
             setStageSize({
-                width: Math.max(320, window.innerWidth - (SIDEBAR_WIDTH + INSPECTOR_WIDTH)),
-                height: Math.max(240, window.innerHeight - HEADER_HEIGHT)
+                width: Math.max(320, el.clientWidth),
+                height: Math.max(240, el.clientHeight)
             });
-        };
-
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
     }, []);
 
     useEffect(() => {
@@ -202,6 +226,10 @@ export const StageManager = () => {
                     if (furn) {
                         store.updateFurniture(currentSelectedId, { x: furn.x + dx * shift, y: furn.y + dy * shift });
                     }
+                    const wall = store.walls.find(w => w.id === currentSelectedId);
+                    if (wall) {
+                        moveWall(currentSelectedId, dx * shift, dy * shift);
+                    }
                     const open = store.openings.find(o => o.id === currentSelectedId);
                     if (open) {
                         const dir = (dx + dy) > 0 ? 1 : -1;
@@ -227,7 +255,7 @@ export const StageManager = () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
-    }, [setIsPanning]);
+    }, [moveWall, setIsPanning]);
 
     const handleStageClick = (e) => {
         if (spaceBarDown || isPanning) return;
@@ -248,7 +276,7 @@ export const StageManager = () => {
                 setWallLengthInput('');
                 setWallAngleInput('0');
             } else {
-                const endPos = shiftDown ? constrainToAngle({ x: activeObject.x1, y: activeObject.y1 }, pos) : pos;
+                const endPos = getWallTargetPoint({ x: activeObject.x1, y: activeObject.y1 }, pos, shiftDown);
                 const newWall = { ...activeObject, x2: endPos.x, y2: endPos.y };
                 if (getDistance({ x: newWall.x1, y: newWall.y1 }, { x: newWall.x2, y: newWall.y2 }) > 5) {
                     addWall(newWall);
@@ -346,11 +374,15 @@ export const StageManager = () => {
         }
 
         if (activeObject && tool === 'wall') {
-            const targetPoint = (shiftDown || e.evt.shiftKey)
-                ? constrainToAngle({ x: activeObject.x1, y: activeObject.y1 }, snapped)
-                : snapped;
+            const targetPoint = getWallTargetPoint(
+                { x: activeObject.x1, y: activeObject.y1 },
+                snapped,
+                shiftDown || e.evt.shiftKey
+            );
 
-            setActiveObject({ ...activeObject, x2: targetPoint.x, y2: targetPoint.y });
+            if (activeObject.x2 !== targetPoint.x || activeObject.y2 !== targetPoint.y) {
+                setActiveObject({ ...activeObject, x2: targetPoint.x, y2: targetPoint.y });
+            }
 
             if (!isWallLengthEditing) {
                 const draftLength = Math.round(getDistance(
@@ -370,14 +402,20 @@ export const StageManager = () => {
         }
 
         if (activeObject && tool === 'measure') {
-            setActiveObject({ ...activeObject, x2: snapped.x, y2: snapped.y });
+            if (activeObject.x2 !== snapped.x || activeObject.y2 !== snapped.y) {
+                setActiveObject({ ...activeObject, x2: snapped.x, y2: snapped.y });
+            }
         }
 
         if (activeObject && tool === 'arc_wall') {
             if (activeObject.arcPhase === 1) {
-                setActiveObject({ ...activeObject, x2: snapped.x, y2: snapped.y });
+                if (activeObject.x2 !== snapped.x || activeObject.y2 !== snapped.y) {
+                    setActiveObject({ ...activeObject, x2: snapped.x, y2: snapped.y });
+                }
             } else if (activeObject.arcPhase === 2) {
-                setActiveObject({ ...activeObject, arcMidX: snapped.x, arcMidY: snapped.y });
+                if (activeObject.arcMidX !== snapped.x || activeObject.arcMidY !== snapped.y) {
+                    setActiveObject({ ...activeObject, arcMidX: snapped.x, arcMidY: snapped.y });
+                }
             }
         }
     };
@@ -462,7 +500,7 @@ export const StageManager = () => {
     } : null;
 
     return (
-        <main className="canvas-area" style={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
+        <main ref={containerRef} className="canvas-area" style={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
             <Rulers width={stageSize.width} height={stageSize.height} />
             <div style={{ position: 'absolute', top: '20px', left: '20px', backgroundColor: themeName === 'light' ? 'rgba(255,255,255,0.9)' : 'rgba(15, 23, 42, 0.8)', border: `1px solid ${theme.grid}`, padding: '10px 15px', borderRadius: '8px', zIndex: 10, color: theme.text, fontSize: '0.8rem', pointerEvents: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
                 Scale: 1:{canvasScale} | Zoom: {Math.round(stageScale * 100)}% | Pos: {Math.round(mousePos.x)}, {Math.round(mousePos.y)} mm
@@ -491,9 +529,6 @@ export const StageManager = () => {
                 ref={stageRef}
                 style={{
                     backgroundColor: theme.bg,
-                    backgroundImage: showGrid ? `linear-gradient(to right, ${theme.grid} 1px, transparent 1px), linear-gradient(to bottom, ${theme.grid} 1px, transparent 1px)` : 'none',
-                    backgroundSize: `${(gridSpacing / canvasScale) * stageScale}px ${(gridSpacing / canvasScale) * stageScale}px`,
-                    backgroundPosition: `${stagePos.x}px ${stagePos.y}px`,
                     cursor: isPanning ? 'grabbing' : (spaceBarDown ? 'grab' : (tool === 'select' ? 'default' : 'crosshair'))
                 }}
                 onContextMenu={(e) => {
@@ -512,6 +547,7 @@ export const StageManager = () => {
                 }}
             >
                 <Layer>
+                    <GridLayer width={stageSize.width} height={stageSize.height} />
                     {/* Ghost floor overlay */}
                     {ghostWalls.length > 0 && (
                         <Group opacity={0.15}>
@@ -618,7 +654,7 @@ export const StageManager = () => {
                     >
                         Set
                     </button>
-                    <span style={{ fontSize: '0.7rem', color: theme.dim, whiteSpace: 'nowrap' }}>Shift: 45° | Esc/Double-click: finish</span>
+                    <span style={{ fontSize: '0.7rem', color: theme.dim, whiteSpace: 'nowrap' }}>{orthoMode ? 'Ortho: 90° | ' : 'Shift: 45° | '}Esc/Double-click: finish</span>
                 </form>
             )}
         </main>

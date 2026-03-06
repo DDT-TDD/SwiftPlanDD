@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { THEMES, FURNITURE_PRESETS } from '../../utils/constants';
 import { formatValue } from '../../utils/units';
-import { getDistance, getPointAtOffset } from '../../utils/geometry';
+import { getAngle, getDistance, getPointAtOffset } from '../../utils/geometry';
 import { useEditorStore } from '../../store/useEditorStore';
 import { useProjectStore } from '../../store/useProjectStore';
 
@@ -32,26 +33,24 @@ export const Inspector = () => {
     const setShowAutoDimensions = useEditorStore(state => state.setShowAutoDimensions);
     const showRulers = useEditorStore(state => state.showRulers);
     const setShowRulers = useEditorStore(state => state.setShowRulers);
+    const orthoMode = useEditorStore(state => state.orthoMode);
+    const setOrthoMode = useEditorStore(state => state.setOrthoMode);
+    const showWallDiagnostics = useEditorStore(state => state.showWallDiagnostics);
+    const setShowWallDiagnostics = useEditorStore(state => state.setShowWallDiagnostics);
     const canvasScale = useEditorStore(state => state.canvasScale);
     const setCanvasScale = useEditorStore(state => state.setCanvasScale);
     const setStagePos = useEditorStore(state => state.setStagePos);
     const setStageScale = useEditorStore(state => state.setStageScale);
-    const bgImageFile = useEditorStore(state => state.bgImageFile);
-    const bgOpacity = useEditorStore(state => state.bgOpacity) ?? 0.3;
-    const setBgOpacity = useEditorStore(state => state.setBgOpacity);
-    const bgScale = useEditorStore(state => state.bgScale) ?? 1;
-    const setBgScale = useEditorStore(state => state.setBgScale);
-    const bgOffsetX = useEditorStore(state => state.bgOffsetX) ?? 0;
-    const setBgOffsetX = useEditorStore(state => state.setBgOffsetX);
-    const bgOffsetY = useEditorStore(state => state.bgOffsetY) ?? 0;
-    const setBgOffsetY = useEditorStore(state => state.setBgOffsetY);
     const selectedId = useEditorStore(state => state.selectedId);
     const selectedIds = useEditorStore(state => state.selectedIds);
     const setSelectedId = useEditorStore(state => state.setSelectedId);
     const setTool = useEditorStore(state => state.setTool);
+    const inspectorCollapsed = useEditorStore(state => state.inspectorCollapsed);
+    const toggleInspectorCollapsed = useEditorStore(state => state.toggleInspectorCollapsed);
 
     const walls = useProjectStore(state => state.walls);
     const updateWall = useProjectStore(state => state.updateWall);
+    const moveWallEndpoint = useProjectStore(state => state.moveWallEndpoint);
     const openings = useProjectStore(state => state.openings);
     const updateOpening = useProjectStore(state => state.updateOpening);
     const furniture = useProjectStore(state => state.furniture);
@@ -63,9 +62,86 @@ export const Inspector = () => {
     const updateRoom = useProjectStore(state => state.updateRoom);
     const annotations = useProjectStore(state => state.annotations);
     const updateAnnotation = useProjectStore(state => state.updateAnnotation);
+    const tracing = useProjectStore(state => state.tracing);
+    const globalTracing = useProjectStore(state => state.globalTracing);
+    const setCurrentFloorTracing = useProjectStore(state => state.setCurrentFloorTracing);
+    const setGlobalTracing = useProjectStore(state => state.setGlobalTracing);
+    const updateCurrentFloorTracing = useProjectStore(state => state.updateCurrentFloorTracing);
+    const clearCurrentFloorTracing = useProjectStore(state => state.clearCurrentFloorTracing);
+    const updateGlobalTracing = useProjectStore(state => state.updateGlobalTracing);
+    const clearGlobalTracing = useProjectStore(state => state.clearGlobalTracing);
+    const floors = useProjectStore(state => state.floors);
+    const currentFloorId = useProjectStore(state => state.currentFloorId);
 
     const theme = THEMES[themeName];
     const selectedFurniture = furniture.filter(item => selectedIds.includes(item.id));
+    const currentFloor = floors.find(floor => floor.id === currentFloorId);
+    const floorTracingInputRef = useRef(null);
+    const globalTracingInputRef = useRef(null);
+
+    const readTracingFile = (file, onLoad) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const imageSrc = typeof event.target?.result === 'string' ? event.target.result : null;
+            if (!imageSrc) return;
+            onLoad(imageSrc);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const resetTracingTransform = (onUpdate) => {
+        onUpdate({ opacity: 0.3, scale: 1, offsetX: 0, offsetY: 0 });
+    };
+
+    const renderTracingControls = (title, tracingData, onUpdate, onClear, inputRef, note) => {
+        if (!tracingData) return null;
+
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${theme.grid}`, background: themeName === 'light' ? '#fff' : '#1e293b' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{title}</span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                            onClick={() => inputRef.current?.click()}
+                            style={{ padding: '4px 8px', background: 'transparent', border: `1px solid ${theme.grid}`, color: theme.text, borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                        >
+                            Replace
+                        </button>
+                        <button
+                            onClick={() => resetTracingTransform(onUpdate)}
+                            style={{ padding: '4px 8px', background: 'transparent', border: `1px solid ${theme.grid}`, color: theme.text, borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                        >
+                            Reset
+                        </button>
+                        <button
+                            onClick={onClear}
+                            style={{ padding: '4px 8px', background: 'transparent', border: `1px solid ${theme.grid}`, color: '#ef4444', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                        >
+                            Remove
+                        </button>
+                    </div>
+                </div>
+                {note && <div style={{ fontSize: '0.72rem', color: theme.dim }}>{note}</div>}
+                <label style={{ fontSize: '0.82rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    Opacity
+                    <input type="range" min="0" max="1" step="0.05" value={tracingData.opacity ?? 0.3} onChange={(e) => onUpdate({ opacity: Number(e.target.value) })} style={{ width: '100px' }} />
+                </label>
+                <label style={{ fontSize: '0.82rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    Scale
+                    <input type="range" min="0.1" max="5" step="0.1" value={tracingData.scale ?? 1} onChange={(e) => onUpdate({ scale: Number(e.target.value) })} style={{ width: '100px' }} />
+                </label>
+                <label style={{ fontSize: '0.82rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    Offset X (mm)
+                    <input type="number" value={tracingData.offsetX || 0} onChange={(e) => onUpdate({ offsetX: Number(e.target.value) })} style={{ width: '78px', padding: '4px', background: themeName === 'light' ? '#fff' : '#0f172a', border: `1px solid ${theme.grid}`, color: theme.text, fontSize: '0.78rem' }} />
+                </label>
+                <label style={{ fontSize: '0.82rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    Offset Y (mm)
+                    <input type="number" value={tracingData.offsetY || 0} onChange={(e) => onUpdate({ offsetY: Number(e.target.value) })} style={{ width: '78px', padding: '4px', background: themeName === 'light' ? '#fff' : '#0f172a', border: `1px solid ${theme.grid}`, color: theme.text, fontSize: '0.78rem' }} />
+                </label>
+            </div>
+        );
+    };
 
     const runFurnitureBatch = (computeUpdates) => {
         if (selectedFurniture.length === 0) return;
@@ -211,9 +287,35 @@ export const Inspector = () => {
         }
     };
 
+    const panelBg = themeName === 'light' ? '#f8fafc' : 'rgba(30, 41, 59, 0.9)';
+    const borderStyle = `1px solid ${theme.grid}`;
+
+    if (inspectorCollapsed) {
+        return (
+            <aside style={{ width: '36px', background: panelBg, borderLeft: borderStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '12px', flexShrink: 0 }}>
+                <button
+                    onClick={toggleInspectorCollapsed}
+                    title="Show Inspector"
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px' }}
+                >
+                    <ChevronLeft size={18} color={theme.dim} />
+                </button>
+            </aside>
+        );
+    }
+
     return (
-        <aside className="inspector" style={{ width: '300px', background: themeName === 'light' ? '#f8fafc' : 'rgba(30, 41, 59, 0.9)', borderLeft: `1px solid ${theme.grid}`, padding: '24px', color: theme.text, overflowY: 'auto' }}>
-            <h2 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '24px', color: theme.accent }}>Inspector</h2>
+        <aside className="inspector" style={{ width: '300px', background: panelBg, borderLeft: borderStyle, padding: '24px', color: theme.text, overflowY: 'auto', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: theme.accent, margin: 0 }}>Inspector</h2>
+                <button
+                    onClick={toggleInspectorCollapsed}
+                    title="Hide Inspector"
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', borderRadius: '6px', lineHeight: 1 }}
+                >
+                    <ChevronRight size={18} color={theme.dim} />
+                </button>
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
                 {selectedIds.length > 1 ? (
@@ -249,6 +351,7 @@ export const Inspector = () => {
                             {walls.find(w => w.id === selectedId) && (() => {
                                 const w = walls.find(w => w.id === selectedId);
                                 const currentLength = Math.round(getDistance({ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 }));
+                                const currentAngle = Math.round(getAngle({ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 }));
                                 return (
                                     <>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -260,12 +363,31 @@ export const Inspector = () => {
                                                     const newLen = Number(e.target.value);
                                                     if (newLen > 0) {
                                                         const p2 = getPointAtOffset({ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 }, newLen);
-                                                        updateWall(w.id, { x2: p2.x, y2: p2.y });
+                                                        moveWallEndpoint(w.id, 'p2', p2.x, p2.y);
                                                     }
                                                 }}
                                                 style={{ width: '80px', background: themeName === 'light' ? '#fff' : '#1e293b', border: `1px solid ${theme.grid}`, color: theme.text, padding: '5px' }}
                                             />
                                             <span style={{ fontSize: '0.8rem' }}>mm</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ fontSize: '0.85rem' }}>Angle:</span>
+                                            <input
+                                                type="number"
+                                                value={currentAngle}
+                                                onChange={(e) => {
+                                                    const newAngle = Number(e.target.value);
+                                                    if (!Number.isFinite(newAngle)) return;
+                                                    const p2 = getPointAtOffset(
+                                                        { x: w.x1, y: w.y1 },
+                                                        { x: w.x1 + Math.cos((newAngle * Math.PI) / 180), y: w.y1 + Math.sin((newAngle * Math.PI) / 180) },
+                                                        currentLength
+                                                    );
+                                                    moveWallEndpoint(w.id, 'p2', p2.x, p2.y);
+                                                }}
+                                                style={{ width: '80px', background: themeName === 'light' ? '#fff' : '#1e293b', border: `1px solid ${theme.grid}`, color: theme.text, padding: '5px' }}
+                                            />
+                                            <span style={{ fontSize: '0.8rem' }}>deg</span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                             <span style={{ fontSize: '0.85rem' }}>Thickness:</span>
@@ -523,6 +645,16 @@ export const Inspector = () => {
                             Drafting / Rough Mode
                         </label>
 
+                        <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input type="checkbox" checked={orthoMode} onChange={(e) => setOrthoMode(e.target.checked)} />
+                            Ortho Wall Drawing
+                        </label>
+
+                        <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input type="checkbox" checked={showWallDiagnostics} onChange={(e) => setShowWallDiagnostics(e.target.checked)} />
+                            Show Wall Diagnostics
+                        </label>
+
                         <div style={{ height: '1px', background: theme.grid, margin: '8px 0' }} />
 
                         <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -610,26 +742,66 @@ export const Inspector = () => {
                             Fit Drawing to Selected Scale
                         </button>
 
-                        {bgImageFile && (
+                        {(tracing || globalTracing) && (
                             <>
                                 <div style={{ height: '1px', background: theme.grid, margin: '8px 0' }} />
                                 <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: theme.dim, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tracing Image</span>
-                                <label style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    Opacity
-                                    <input type="range" min="0" max="1" step="0.05" value={bgOpacity} onChange={(e) => setBgOpacity(Number(e.target.value))} style={{ width: '100px' }} />
-                                </label>
-                                <label style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    Scale
-                                    <input type="range" min="0.1" max="5" step="0.1" value={bgScale} onChange={(e) => setBgScale(Number(e.target.value))} style={{ width: '100px' }} />
-                                </label>
-                                <label style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    Offset X (mm)
-                                    <input type="number" value={bgOffsetX} onChange={(e) => setBgOffsetX(Number(e.target.value))} style={{ width: '70px', padding: '4px', background: themeName === 'light' ? '#fff' : '#1e293b', border: `1px solid ${theme.grid}`, color: theme.text, fontSize: '0.8rem' }} />
-                                </label>
-                                <label style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    Offset Y (mm)
-                                    <input type="number" value={bgOffsetY} onChange={(e) => setBgOffsetY(Number(e.target.value))} style={{ width: '70px', padding: '4px', background: themeName === 'light' ? '#fff' : '#1e293b', border: `1px solid ${theme.grid}`, color: theme.text, fontSize: '0.8rem' }} />
-                                </label>
+                                {renderTracingControls(
+                                    `${currentFloor?.name || 'Current Floor'} Tracing`,
+                                    tracing,
+                                    updateCurrentFloorTracing,
+                                    clearCurrentFloorTracing,
+                                    floorTracingInputRef,
+                                    globalTracing ? 'This floor-specific tracing overrides the global tracing on the active floor.' : 'Visible only on the active floor.'
+                                )}
+                                {renderTracingControls(
+                                    'Global Tracing',
+                                    globalTracing,
+                                    updateGlobalTracing,
+                                    clearGlobalTracing,
+                                    globalTracingInputRef,
+                                    tracing ? 'Used as a fallback on floors without their own tracing.' : 'Visible on every floor without a floor-specific override.'
+                                )}
+                                <input
+                                    ref={floorTracingInputRef}
+                                    type="file"
+                                    hidden
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        const base = tracing || {};
+                                        readTracingFile(file, (imageSrc) => {
+                                            setCurrentFloorTracing({
+                                                imageSrc,
+                                                opacity: base.opacity ?? 0.3,
+                                                scale: base.scale ?? 1,
+                                                offsetX: base.offsetX ?? 0,
+                                                offsetY: base.offsetY ?? 0
+                                            });
+                                        });
+                                        e.target.value = '';
+                                    }}
+                                />
+                                <input
+                                    ref={globalTracingInputRef}
+                                    type="file"
+                                    hidden
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        const base = globalTracing || {};
+                                        readTracingFile(file, (imageSrc) => {
+                                            setGlobalTracing({
+                                                imageSrc,
+                                                opacity: base.opacity ?? 0.3,
+                                                scale: base.scale ?? 1,
+                                                offsetX: base.offsetX ?? 0,
+                                                offsetY: base.offsetY ?? 0
+                                            });
+                                        });
+                                        e.target.value = '';
+                                    }}
+                                />
                             </>
                         )}
 

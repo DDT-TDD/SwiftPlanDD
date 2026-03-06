@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Group, Line, Rect, Text, Path } from 'react-konva';
 import { getDistance, getAngle } from '../../utils/geometry';
 import { THEMES } from '../../utils/constants';
@@ -7,7 +7,7 @@ import { getRoughLinePath } from '../../utils/roughUtils';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useEditorStore } from '../../store/useEditorStore';
 
-const DimensionLine = ({ dim, canvasScale, theme, unit, showDual, isSelected, onSelect, interactive = true, roughMode = false }) => {
+const DimensionLine = memo(({ dim, canvasScale, theme, unit, showDual, isSelected, onSelect, interactive = true, roughMode = false }) => {
     const p1 = { x: dim.x1 / canvasScale, y: dim.y1 / canvasScale };
     const p2 = { x: dim.x2 / canvasScale, y: dim.y2 / canvasScale };
     const logicalDist = getDistance({ x: dim.x1, y: dim.y1 }, { x: dim.x2, y: dim.y2 });
@@ -40,9 +40,9 @@ const DimensionLine = ({ dim, canvasScale, theme, unit, showDual, isSelected, on
             <Line points={[p1.x, p1.y, p2.x, p2.y]} stroke="transparent" strokeWidth={20} />
         </Group>
     );
-};
+});
 
-export const AnnotationLayer = () => {
+export const AnnotationLayer = memo(() => {
     const dimensions = useProjectStore(state => state.dimensions);
     const annotations = useProjectStore(state => state.annotations);
     const updateAnnotation = useProjectStore(state => state.updateAnnotation);
@@ -158,4 +158,4 @@ export const AnnotationLayer = () => {
             ))}
         </Group>
     );
-};
+});

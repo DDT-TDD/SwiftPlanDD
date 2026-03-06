@@ -1,21 +1,21 @@
+import { memo } from 'react';
 import { Group, Circle, Image as KonvaImage, Line } from 'react-konva';
 import { THEMES } from '../../utils/constants';
 import { useEditorStore } from '../../store/useEditorStore';
+import { useProjectStore } from '../../store/useProjectStore';
 import useImage from 'use-image';
 
-export const InteractionLayer = () => {
+export const InteractionLayer = memo(() => {
     const tool = useEditorStore(state => state.tool);
     const mousePos = useEditorStore(state => state.mousePos);
     const canvasScale = useEditorStore(state => state.canvasScale);
     const themeName = useEditorStore(state => state.themeName);
-    const bgImageFile = useEditorStore(state => state.bgImageFile);
-    const bgOpacity = useEditorStore(state => state.bgOpacity) ?? 0.3;
-    const bgScale = useEditorStore(state => state.bgScale) ?? 1;
-    const bgOffsetX = useEditorStore(state => state.bgOffsetX) ?? 0;
-    const bgOffsetY = useEditorStore(state => state.bgOffsetY) ?? 0;
+    const tracing = useProjectStore(state => state.tracing);
+    const globalTracing = useProjectStore(state => state.globalTracing);
     const theme = THEMES[themeName];
+    const activeTracing = tracing || globalTracing;
 
-    const [bgImage] = useImage(bgImageFile);
+    const [bgImage] = useImage(activeTracing?.imageSrc || null);
 
     // Snap type color coding: green=endpoint, blue=midpoint, orange=perpendicular, gray=grid
     const snapColor = mousePos.snapType === 'point' ? '#22c55e'
@@ -34,11 +34,11 @@ export const InteractionLayer = () => {
             {bgImage && (
                 <KonvaImage
                     image={bgImage}
-                    opacity={bgOpacity}
-                    scaleX={bgScale}
-                    scaleY={bgScale}
-                    x={bgOffsetX / canvasScale}
-                    y={bgOffsetY / canvasScale}
+                    opacity={activeTracing?.opacity ?? 0.3}
+                    scaleX={activeTracing?.scale ?? 1}
+                    scaleY={activeTracing?.scale ?? 1}
+                    x={(activeTracing?.offsetX || 0) / canvasScale}
+                    y={(activeTracing?.offsetY || 0) / canvasScale}
                 />
             )}
 
@@ -65,4 +65,4 @@ export const InteractionLayer = () => {
             )}
         </Group>
     );
-};
+});

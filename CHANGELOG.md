@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.1] - 2026-03-06
+
+### Added
+- Ortho wall drawing mode with keyboard toggle and status indicator.
+- Wall angle editing in the Inspector for selected walls.
+- Scoped tracing import so a tracing can be assigned to the current floor or shared across all floors.
+- Separate Inspector controls for floor-specific and global tracing underlays.
+- Wall diagnostics overlay toggle to visualize endpoints and junction density while editing.
+- Tracing replace and reset controls for both floor and global tracing entries.
+- Foldable left toolbar and right Inspector panels to reclaim canvas space while drafting.
+- 1.1.1 release smoke-test checklist for manual regression coverage.
+
+### Changed
+- Wall translation is now supported directly by dragging a selected wall segment or nudging it with arrow keys.
+- Wall geometry edits now propagate through connected endpoints consistently from both canvas drags and Inspector edits.
+- Tracing data now lives in project state so floor switching, exports, and imports preserve tracing scope and transforms.
+- Autosave now degrades gracefully if browser storage cannot hold embedded tracing images.
+- Canvas sizing now follows live panel collapse and expand state instead of relying on fixed sidebar widths.
+- Release preparation now includes a targeted checklist for core wall/tracing workflows.
+
+### Fixed
+- Selected walls are no longer effectively locked in place when layout adjustments require repositioning.
+- Wall length edits no longer break connected joints when the edited endpoint is shared with adjacent walls.
+- Corner-handle drags no longer bubble into whole-wall translation, preventing unpredictable jumps while moving joined endpoints.
+- Tracing images no longer create cross-floor confusion by always appearing on every floor.
+
+### Verified
+- Lint and production build passed after the wall-drag and foldable-panel changes.
+- Store-level audit confirmed that endpoint moves and whole-wall moves both preserve connected shared endpoints.
+
 ## [1.1.0] - 2026-03-04
 
 ### Added
