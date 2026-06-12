@@ -596,9 +596,8 @@ export const Inspector = () => {
                                         <button
                                             key={p.name}
                                             onClick={() => handleAddFurniture(p)}
+                                            className="library-button"
                                             style={{ padding: '8px', background: themeName === 'light' ? '#fff' : '#1e293b', border: `1px solid ${theme.grid}`, color: theme.text, borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', textAlign: 'left', transition: 'background 0.2s' }}
-                                            onMouseOver={(e) => e.target.style.background = theme.furniture}
-                                            onMouseOut={(e) => e.target.style.background = themeName === 'light' ? '#fff' : '#1e293b'}
                                         >
                                             <div style={{ fontWeight: '500' }}>{p.name}</div>
                                             <div style={{ color: theme.dim, fontSize: '0.7rem' }}>{formatValue(p.width, unit)} x {formatValue(p.height, unit)}</div>

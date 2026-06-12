@@ -299,6 +299,7 @@ const App = () => {
         setShowShortcuts(false);
         useEditorStore.getState().clearSelection();
         useEditorStore.getState().setActiveObject(null);
+        useEditorStore.getState().setTool('select');
       }
     };
 
@@ -309,7 +310,7 @@ const App = () => {
   const totalArea = rooms.reduce((sum, room) => sum + (room.area || 0), 0) / 1_000_000;
 
   return (
-    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', background: theme.bg, color: theme.text }}>
+    <div className={`app-container theme-${themeName}`} style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', background: theme.bg, color: theme.text }}>
       <Header />
       <div style={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
         <Sidebar />

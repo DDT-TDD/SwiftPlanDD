@@ -203,7 +203,8 @@ export const StageManager = () => {
                     setWallLengthInput('');
                     setWallAngleInput('0');
                 } else {
-                    useEditorStore.getState().setSelectedId(null);
+                    useEditorStore.getState().clearSelection();
+                    useEditorStore.getState().setTool('select');
                 }
             }
 
@@ -365,7 +366,10 @@ export const StageManager = () => {
         const logicalPos = getLogicalPosition(stage);
         if (!logicalPos) return;
 
-        const snapped = getSnappedPoint(logicalPos, walls, stageScale / canvasScale, gridSpacing);
+        const isAltPressed = e.evt.altKey;
+        const snapped = isAltPressed
+            ? { x: logicalPos.x, y: logicalPos.y, snapType: null }
+            : getSnappedPoint(logicalPos, walls, stageScale / canvasScale, gridSpacing);
         throttledSetMousePos(snapped);
 
         if (tool === 'select' && selectionStart) {
@@ -505,6 +509,23 @@ export const StageManager = () => {
             <div style={{ position: 'absolute', top: '20px', left: '20px', backgroundColor: themeName === 'light' ? 'rgba(255,255,255,0.9)' : 'rgba(15, 23, 42, 0.8)', border: `1px solid ${theme.grid}`, padding: '10px 15px', borderRadius: '8px', zIndex: 10, color: theme.text, fontSize: '0.8rem', pointerEvents: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
                 Scale: 1:{canvasScale} | Zoom: {Math.round(stageScale * 100)}% | Pos: {Math.round(mousePos.x)}, {Math.round(mousePos.y)} mm
             </div>
+
+            {tool === 'wall' && activeObject && (() => {
+                const screenX = ((mousePos.x / canvasScale) * stageScale) + stagePos.x;
+                const screenY = ((mousePos.y / canvasScale) * stageScale) + stagePos.y;
+                return (
+                    <div
+                        className="angle-tooltip-overlay"
+                        style={{
+                            left: `${screenX}px`,
+                            top: `${screenY}px`
+                        }}
+                    >
+                        <span>Len: {wallLengthInput || 0} mm</span>
+                        <span style={{ color: theme.accent }}>∠ {wallAngleInput || 0}°</span>
+                    </div>
+                );
+            })()}
 
             <Stage
                 width={stageSize.width}

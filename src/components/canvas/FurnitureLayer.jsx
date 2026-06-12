@@ -162,7 +162,10 @@ const Furniture = memo(({ item, onSelect, isSelected, canvasScale, onDragStart, 
             {isSelected && interactive && (
                 <Transformer
                     ref={trRef}
-                    enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+                    enabledAnchors={[
+                        'top-left', 'top-right', 'bottom-left', 'bottom-right',
+                        'top-center', 'bottom-center', 'left-center', 'right-center'
+                    ]}
                     rotateEnabled
                     rotationSnaps={ROTATION_SNAPS}
                     borderStroke={theme.accent}

@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.0] - 2026-06-12
+
+### Added
+- Alt snapping bypass: Hold `Alt` to move/draw with sub-millimeter precision.
+- 8-anchor handles on furniture transformer: enables non-proportional stretching of width and depth.
+- Floating HUD tooltip next to active cursor displaying segment length and angle.
+- Project-wide global history for floor focus restoration on undo/redo.
+- Undo tracking for floor operations: add, rename, and remove.
+
+### Changed
+- Escape key: cancels drawing active elements and now resets the active tool back to 'select' mode.
+- Preserved undo/redo stacks when switching floors.
+- Swapped manual DOM style mutations on hover for pure CSS class transitions in themes.
+
+### Fixed
+- Addressed hover/text background layout bug in fixture library buttons.
+
 ## [1.1.1] - 2026-03-06
 
 ### Added

@@ -13,6 +13,11 @@ const getHistorySnapshot = (state, label) => ({
     rooms: state.rooms,
     dimensions: state.dimensions,
     annotations: state.annotations,
+    tracing: state.tracing,
+    globalTracing: state.globalTracing,
+    floors: state.floors,
+    currentFloorId: state.currentFloorId,
+    floorData: state.floorData,
     _label: label || 'Edit'
 });
 
@@ -337,13 +342,12 @@ export const useProjectStore = create((set, get) => ({
             rooms: target.rooms,
             dimensions: target.dimensions,
             annotations: target.annotations,
-            tracing: target.tracing || null,
-            past: [],
-            future: []
+            tracing: target.tracing || null
         });
     },
 
     addFloor: (name) => {
+        get().saveState('Add Floor');
         const id = `floor-${Date.now()}`;
         set((state) => ({
             floors: [...state.floors, { id, name: name || `Floor ${state.floors.length}` }]
@@ -352,12 +356,14 @@ export const useProjectStore = create((set, get) => ({
     },
 
     renameFloor: (floorId, name) => {
+        get().saveState('Rename Floor');
         set((state) => ({
             floors: state.floors.map(f => f.id === floorId ? { ...f, name } : f)
         }));
     },
 
     removeFloor: (floorId) => {
+        get().saveState('Remove Floor');
         const state = get();
         if (state.floors.length <= 1) return; // Can't remove last floor
         if (state.currentFloorId === floorId) {

@@ -26,6 +26,11 @@ export const ContextMenu = () => {
         setContextMenu({ show: false });
     };
 
+    const itemStyle = {
+        color: theme.text,
+        cursor: 'pointer'
+    };
+
     return (
         <div
             style={{
@@ -34,81 +39,42 @@ export const ContextMenu = () => {
                 left: menuX,
                 background: themeName === 'light' ? '#ffffff' : '#1e293b',
                 border: `1px solid ${theme.grid}`,
-                borderRadius: '6px',
-                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+                borderRadius: '8px',
+                boxShadow: 'var(--shadow-premium)',
                 zIndex: 9999,
                 display: 'flex',
                 flexDirection: 'column',
-                minWidth: '150px',
-                padding: '4px'
+                minWidth: '160px',
+                padding: '6px',
+                gap: '2px'
             }}
         >
             <button
                 onClick={() => { useProjectStore.getState().undo(); setContextMenu({ show: false }); }}
-                style={{
-                    background: 'transparent',
-                    border: 'none',
-                    padding: '8px 12px',
-                    textAlign: 'left',
-                    color: theme.text,
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    borderRadius: '4px'
-                }}
-                onMouseEnter={(e) => e.target.style.background = themeName === 'light' ? '#f1f5f9' : '#334155'}
-                onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                className="context-menu-item"
+                style={itemStyle}
             >
                 Undo (Ctrl+Z)
             </button>
             <button
                 onClick={() => { useProjectStore.getState().redo(); setContextMenu({ show: false }); }}
-                style={{
-                    background: 'transparent',
-                    border: 'none',
-                    padding: '8px 12px',
-                    textAlign: 'left',
-                    color: theme.text,
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    borderRadius: '4px'
-                }}
-                onMouseEnter={(e) => e.target.style.background = themeName === 'light' ? '#f1f5f9' : '#334155'}
-                onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                className="context-menu-item"
+                style={itemStyle}
             >
                 Redo (Ctrl+Y)
             </button>
-            <div style={{ height: '1px', background: theme.grid, margin: '4px 0' }} />
+            <div style={{ height: '1px', background: theme.grid, margin: '4px 2px' }} />
             <button
                 onClick={handleDelete}
-                style={{
-                    background: 'transparent',
-                    border: 'none',
-                    padding: '8px 12px',
-                    textAlign: 'left',
-                    color: '#ef4444',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    borderRadius: '4px'
-                }}
-                onMouseEnter={(e) => e.target.style.background = themeName === 'light' ? '#f1f5f9' : '#334155'}
-                onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                className="context-menu-item delete"
+                style={{ cursor: 'pointer' }}
             >
                 Delete
             </button>
             <button
                 onClick={() => setContextMenu({ show: false })}
-                style={{
-                    background: 'transparent',
-                    border: 'none',
-                    padding: '8px 12px',
-                    textAlign: 'left',
-                    color: theme.text,
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    borderRadius: '4px'
-                }}
-                onMouseEnter={(e) => e.target.style.background = themeName === 'light' ? '#f1f5f9' : '#334155'}
-                onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                className="context-menu-item"
+                style={itemStyle}
             >
                 Cancel
             </button>
